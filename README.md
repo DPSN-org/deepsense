@@ -222,7 +222,7 @@ source env/bin/activate
 source env/bin/activate
 
 # Run sandbox tool server
-uvicorn tools.sandbox_tool:app --host 0.0.0.0 --port 8000 --reload
+uvicorn sandbox_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The sandbox tool will be available at `http://localhost:8001`
