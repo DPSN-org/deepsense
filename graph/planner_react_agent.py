@@ -22,6 +22,7 @@ from langchain_anthropic import ChatAnthropic
 from utils.token_utils import estimate_token_count, chunk_data_by_tokens
 from graph.summarizer_graph import schema_discovery_wrapper
 from utils.db_utils import save_message
+ from utils.db_utils import create_session
 
 
 
@@ -293,9 +294,10 @@ app = workflow.compile()
 
 def run_planner_react_agent(user_input: str, session_id: str = None, existing_messages: List[BaseMessage] = None) -> str:
     try:
-        # Generate session_id if not provided
+        # Generate session_id if not provided and create session in database
         if not session_id:
-            session_id = str(uuid.uuid4())
+            session_id = create_session()
+       
         
         # Initialize messages
         if existing_messages:
@@ -313,7 +315,6 @@ def run_planner_react_agent(user_input: str, session_id: str = None, existing_me
             "tool_output": None
         }
         # Save the human message to database
-      
         result = app.invoke(state, config={"recursion_limit": 50})
         print("[WORKFLOW] Finished. Result:", result.get("messages")[-1].content)
         return result

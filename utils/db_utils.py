@@ -196,12 +196,13 @@ def init_database():
     finally:
         return_connection(conn)
 
-def create_session(user_id: Optional[str] = None) -> str:
+def create_session(user_id: Optional[str] = None, session_id: Optional[str] = None) -> str:
     """
     Create a new chat session.
     
     Args:
         user_id: Optional user identifier
+        session_id: Optional session ID to use (if provided and session exists, returns existing session_id)
         
     Returns:
         session_id: UUID of the created session
@@ -209,16 +210,50 @@ def create_session(user_id: Optional[str] = None) -> str:
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                INSERT INTO chat_sessions (user_id, created_at, updated_at, status)
-                VALUES (%s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'active')
-                RETURNING session_id
-            """, (user_id,))
-            
-            session_id = cursor.fetchone()[0]
-            conn.commit()
-            print(f"✅ Created session: {session_id}")
-            return str(session_id)
+            if session_id:
+                # Check if session already exists
+                cursor.execute("""
+                    SELECT session_id FROM chat_sessions WHERE session_id = %s
+                """, (session_id,))
+                
+                existing_session = cursor.fetchone()
+                if existing_session:
+                    print(f"✅ Session already exists: {session_id}")
+                    return str(session_id)
+                
+                # Try to insert with the provided session_id
+                try:
+                    cursor.execute("""
+                        INSERT INTO chat_sessions (session_id, user_id, created_at, updated_at, status)
+                        VALUES (%s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'active')
+                        RETURNING session_id
+                    """, (session_id, user_id))
+                    
+                    session_id = cursor.fetchone()[0]
+                    conn.commit()
+                    print(f"✅ Created session with provided ID: {session_id}")
+                    return str(session_id)
+                    
+                except Exception as insert_error:
+                    # If insert fails due to duplicate key, just return the session_id
+                    if "duplicate key" in str(insert_error).lower() or "unique constraint" in str(insert_error).lower():
+                        print(f"✅ Session already exists (caught duplicate): {session_id}")
+                        return str(session_id)
+                    else:
+                        # Re-raise if it's a different error
+                        raise insert_error
+            else:
+                # Create new session with auto-generated ID
+                cursor.execute("""
+                    INSERT INTO chat_sessions (user_id, created_at, updated_at, status)
+                    VALUES (%s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'active')
+                    RETURNING session_id
+                """, (user_id,))
+                
+                session_id = cursor.fetchone()[0]
+                conn.commit()
+                print(f"✅ Created session: {session_id}")
+                return str(session_id)
             
     except Exception as e:
         conn.rollback()

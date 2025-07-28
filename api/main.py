@@ -174,6 +174,9 @@ async def process_user_query(request: QueryRequest):
         if not session_id:
             # Create new session if none provided
             session_id = create_session(request.user_id)
+        else:
+            # If session_id is provided, ensure it exists in database
+            session_id = create_session(request.user_id, session_id=session_id)
         
         # Check if session exists in cache
         existing_messages = None
