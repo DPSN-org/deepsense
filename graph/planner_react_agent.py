@@ -170,7 +170,7 @@ def model_node(state):
     messages = state["messages"]
     session_id = state.get("session_id")
     print('------messages------')
-    log_messages(messages)
+    # log_messages(messages)
     bound_model = state.get("bound_model")
     
     if not bound_model:
