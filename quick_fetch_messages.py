@@ -82,9 +82,42 @@ def main():
     
     print(f"\n📨 Found {len(messages)} messages:")
     
-    # Print each message
+    # Prepare data for JSON file
+    log_data = {
+        "session_info": {
+            "session_id": session_info['session_id'],
+            "user_id": session_info.get('user_id', 'N/A'),
+            "created_at": session_info['created_at'],
+            "updated_at": session_info['updated_at'],
+            "status": session_info['status']
+        },
+        "messages": []
+    }
+    
+    # Process each message
     for message in messages:
+        # Print message to console
         print_message(message)
+        
+        # Add message to log data
+        log_data["messages"].append({
+            "message_id": message['message_id'],
+            "session_id": message['session_id'],
+            "message_type": message['message_type'],
+            "content": message['content'],
+            "timestamp": message['timestamp'],
+            "sequence_order": message['sequence_order'],
+            "metadata": message.get('metadata', {})
+        })
+    
+    # Write to JSON file
+    try:
+        with open('message_log.json', 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, indent=2, ensure_ascii=False, default=str)
+        print(f"\n💾 Messages written to message_log.json")
+        print(f"📊 Total messages logged: {len(log_data['messages'])}")
+    except Exception as e:
+        print(f"❌ Error writing to message_log.json: {e}")
 
 if __name__ == "__main__":
     main() 
