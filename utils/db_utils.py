@@ -351,13 +351,14 @@ def save_message(session_id: str, message_type: str, content: Dict[str, Any],
     finally:
         return_connection(conn)
 
-def get_session_messages(session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+def get_session_messages(session_id: str, limit: Optional[int] = None, exclude_nested_subgraph: bool = True) -> List[Dict[str, Any]]:
     """
     Get all messages for a session in ascending order.
     
     Args:
         session_id: UUID of the session
         limit: Optional limit on number of messages to return
+        exclude_nested_subgraph: Whether to exclude nested subgraph messages (default: True)
         
     Returns:
         List of message dictionaries
@@ -365,13 +366,25 @@ def get_session_messages(session_id: str, limit: Optional[int] = None) -> List[D
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            query = """
-                SELECT message_id, session_id, message_type, content, 
-                       timestamp, sequence_order, metadata
-                FROM chat_messages
-                WHERE session_id = %s
-                ORDER BY sequence_order ASC
-            """
+            if exclude_nested_subgraph:
+                # Query that excludes nested subgraph messages
+                query = """
+                    SELECT message_id, session_id, message_type, content, 
+                           timestamp, sequence_order, metadata
+                    FROM chat_messages
+                    WHERE session_id = %s
+                      AND (metadata->>'nested_subgraph' IS NULL OR metadata->>'nested_subgraph' != 'true')
+                    ORDER BY sequence_order ASC
+                """
+            else:
+                # Query that includes all messages
+                query = """
+                    SELECT message_id, session_id, message_type, content, 
+                           timestamp, sequence_order, metadata
+                    FROM chat_messages
+                    WHERE session_id = %s
+                    ORDER BY sequence_order ASC
+                """
             
             if limit:
                 query += f" LIMIT {limit}"
@@ -387,7 +400,8 @@ def get_session_messages(session_id: str, limit: Optional[int] = None) -> List[D
                 message_dict['session_id'] = str(message_dict['session_id'])
                 messages.append(message_dict)
             
-            print(f"✅ Retrieved {len(messages)} messages for session {session_id}")
+            filter_info = " (excluding nested subgraphs)" if exclude_nested_subgraph else " (including all messages)"
+            print(f"✅ Retrieved {len(messages)} messages for session {session_id}{filter_info}")
             return messages
             
     except Exception as e:

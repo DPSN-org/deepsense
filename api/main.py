@@ -97,7 +97,11 @@ def convert_db_message_to_langgraph(db_message: Dict[str, Any], include_nested_s
     elif message_type == 'HumanMessage':
         return HumanMessage(content=content.get('content', ''))
     elif message_type == 'AIMessage':
-        return AIMessage(content=content.get('content', ''))
+        # Include tool_calls if present in the stored content
+        ai_message_kwargs = {"content": content.get('content', '')}
+        if 'tool_calls' in content:
+            ai_message_kwargs["tool_calls"] = content['tool_calls']
+        return AIMessage(**ai_message_kwargs)
     elif message_type == 'ToolMessage':
         return ToolMessage(
             content=content.get('content', ''),
@@ -118,6 +122,9 @@ def save_langgraph_message_to_db(session_id: str, message, metadata: Dict[str, A
     elif isinstance(message, AIMessage):
         message_type = 'AIMessage'
         content = {'content': message.content}
+        # Include tool_calls if present
+        if hasattr(message, 'tool_calls') and message.tool_calls:
+            content['tool_calls'] = message.tool_calls
     elif isinstance(message, ToolMessage):
         message_type = 'ToolMessage'
         content = {
@@ -141,11 +148,11 @@ async def root():
             "/query": "POST - Process a natural language query",
             "/sessions": "POST - Create a new session",
             "/sessions/{session_id}": "GET - Get session information",
-            "/sessions/{session_id}/messages": "GET - Get session messages (excludes nested subgraphs)",
+            "/sessions/{session_id}/messages": "GET - Get session messages (excludes nested subgraphs by default)",
+            "/sessions/{session_id}/messages/clean": "GET - Get session messages (explicitly excludes nested subgraphs)",
             "/sessions/{session_id}/messages/full": "GET - Get all session messages (includes nested subgraphs)",
             "/sessions/{session_id}": "DELETE - Delete a session",
             "/users/{user_id}/sessions": "GET - Get user sessions",
-            "/health": "GET - Health check endpoint"
         }
     }
 
@@ -188,7 +195,7 @@ async def process_user_query(request: QueryRequest):
             agent_states_cache.move_to_end(session_id)
         else:
             # Fetch session history from database
-            db_messages = get_session_messages(session_id)
+            db_messages = get_session_messages(session_id, exclude_nested_subgraph=True)
             if db_messages:
                 existing_messages = [
                     convert_db_message_to_langgraph(msg, include_nested_subgraphs=False) 
@@ -302,25 +309,71 @@ async def get_session_information(session_id: str):
         raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
 
 @app.get("/sessions/{session_id}/messages", response_model=List[SessionMessage])
-async def get_session_messages_endpoint(session_id: str, limit: Optional[int] = 100, include_nested: bool = False):
-    """Get all messages for a session."""
+async def get_session_messages_endpoint(
+    session_id: str, 
+    limit: Optional[int] = 100, 
+    include_nested: bool = False,
+    exclude_nested_subgraph: bool = True
+):
+    """
+    Get all messages for a session.
+    
+    Parameters:
+    - session_id: The session ID to retrieve messages for
+    - limit: Maximum number of messages to return (default: 100)
+    - include_nested: Include nested subgraph messages (default: False)
+    - exclude_nested_subgraph: Explicitly exclude nested subgraph messages (default: True)
+    """
     try:
         # Verify session exists
         session_info = get_session_info(session_id)
         if not session_info:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        # Get messages
-        db_messages = get_session_messages(session_id, limit=limit)
+        # Determine if we should exclude nested subgraphs
+        should_exclude = exclude_nested_subgraph and not include_nested
+        
+        # Get messages from database with the appropriate filter
+        db_messages = get_session_messages(session_id, limit=limit, exclude_nested_subgraph=should_exclude)
         
         # Convert to response model
         messages = []
         for msg in db_messages:
-            # Filter nested subgraph messages unless explicitly requested
-            metadata = msg.get('metadata', {})
-            if not include_nested and metadata.get('nested_subgraph', False):
-                continue
-                
+            messages.append(SessionMessage(
+                message_id=msg['message_id'],
+                session_id=msg['session_id'],
+                message_type=msg['message_type'],
+                content=msg['content'],
+                timestamp=msg['timestamp'].isoformat(),
+                sequence_order=msg['sequence_order'],
+                metadata=msg['metadata']
+            ))
+        
+        return messages
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving messages: {str(e)}")
+
+@app.get("/sessions/{session_id}/messages/clean", response_model=List[SessionMessage])
+async def get_session_messages_clean_endpoint(session_id: str, limit: Optional[int] = 100):
+    """
+    Get all messages for a session, explicitly excluding nested subgraph messages.
+    This endpoint is equivalent to /messages with exclude_nested_subgraph=true.
+    """
+    try:
+        # Verify session exists
+        session_info = get_session_info(session_id)
+        if not session_info:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Get messages from database with nested subgraph exclusion
+        db_messages = get_session_messages(session_id, limit=limit, exclude_nested_subgraph=True)
+        
+        # Convert to response model
+        messages = []
+        for msg in db_messages:
             messages.append(SessionMessage(
                 message_id=msg['message_id'],
                 session_id=msg['session_id'],
@@ -347,10 +400,10 @@ async def get_session_messages_full_endpoint(session_id: str, limit: Optional[in
         if not session_info:
             raise HTTPException(status_code=404, detail="Session not found")
         
-        # Get messages
-        db_messages = get_session_messages(session_id, limit=limit)
+        # Get messages from database including all messages
+        db_messages = get_session_messages(session_id, limit=limit, exclude_nested_subgraph=False)
         
-        # Convert to response model (include all messages)
+        # Convert to response model
         messages = []
         for msg in db_messages:
             messages.append(SessionMessage(

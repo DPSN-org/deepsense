@@ -15,6 +15,7 @@ from tools.sandbox_tool import sandbox_code_tool
 from tools.weather_tool import get_weather
 from tools.flight_tool import find_flights
 from tools.location_tool import get_location_codes
+from tools.dpsn_intelligence_tool import dpsn_intelligence_tool
 from langchain_core.tools import tool
 from graph.system_prompt import get_system_prompt
 # You can add more tools, e.g., from tools.price_tools import price_tools
@@ -42,7 +43,7 @@ def location_tool(keyword: str, sub_type: str = "CITY,AIRPORT"):
     return get_location_codes(keyword, sub_type)
 
 # Combine all tools - simple version to avoid rate limits
-all_tools = helius_tools + datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool]# Just the main Helius tool for Solana queries
+all_tools = helius_tools + datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool, dpsn_intelligence_tool]# Just the main Helius tool for Solana queries
 
 # Create the tool node
 tool_node = ToolNode(all_tools)
@@ -148,7 +149,7 @@ def tool_selection_node(state):
             break
     
     # Since we bind tools only once, we can bind ALL tools
-    all_available_tools = helius_tools + datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool]
+    all_available_tools = helius_tools + datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool, dpsn_intelligence_tool]
     
     print(f"[TOOL_SELECTION] Binding all {len(all_available_tools)} tools for comprehensive access")
     
@@ -184,10 +185,15 @@ def model_node(state):
     # Save the new AI message to database if session_id is available
     if session_id:
         try:
+            # Prepare content with both message content and tool_calls if present
+            content_dict = {"content": response.content}
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                content_dict["tool_calls"] = response.tool_calls
+            
             save_message(
                 session_id=session_id,
                 message_type="AIMessage",
-                content={"content": response.content},
+                content=content_dict,
                 metadata={"node": "model_node", "timestamp": str(datetime.now())}
             )
             print(f"[MODEL_NODE] Saved AI message to session {session_id}")

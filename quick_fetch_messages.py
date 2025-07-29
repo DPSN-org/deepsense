@@ -14,7 +14,7 @@ sys.path.append('.')
 from utils.db_utils import get_session_messages, get_session_info, test_connection
 
 # Edit this variable to fetch messages for a specific session
-SESSION_ID = "cf5da904-4814-4ac3-8787-1ddd1280863a"  # Replace with actual session ID
+SESSION_ID = ""  # Replace with actual session ID
 
 def format_timestamp(timestamp_str: str) -> str:
     """Format timestamp for better readability."""
