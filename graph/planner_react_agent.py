@@ -66,8 +66,7 @@ bound_model_cache = {}
 class AgentState(TypedDict):
     session_id: str  # Add session_id to state
     tool_output: ToolMessage | None
-    tool_chunks: Optional[List[str]]
-    chunk_index: int
+    tool_outputs: List[ToolMessage] | None
     summaries: List[str]
     final_summary: Optional[str]
     messages: Annotated[Sequence[BaseMessage], lambda left, right: left + right]
@@ -75,6 +74,7 @@ class AgentState(TypedDict):
     selected_tools: List[Any]  # Add selected_tools to state
     bound_model: Any  # Track bound model in state
     tools_bound: bool  # Flag to track if tools are already bound
+    current_tool_index: int
 
 
 
@@ -94,24 +94,42 @@ def tool_node_wrapper(state):
     if not hasattr(last_message, "tool_calls"):
         raise ValueError("Expected last message to have tool_calls")
    
-    tool_output = tool_messages[-1]
-    print('set tool_output')
+    # Convert tool_messages to list if it's not already
+    if tool_messages:
+        tool_outputs = tool_messages
+        print(f'set tool_outputs with {len(tool_outputs)} tool messages')
+    else:
+        tool_outputs = []
+        print('no tool messages found')
     
-    # Save tool output to database if session_id is available
+    
+    return {'tool_outputs': tool_outputs,"current_tool_index" :-1}
+def select_tool_output(state):
+    print('------select_tool_output------')
+    print(len(state['tool_outputs']))
    
-           
-  
-    return {'tool_output': tool_output}
-def should_chunk(state):
-    print('------should_chunk------')
-    print(state['tool_output'])
+    current_tool_index = state['current_tool_index'] 
+    tool_outputs = state['tool_outputs']
+    current_tool_index +=1
+    tool_output =None
+    if len(tool_outputs) !=0  and  len(tool_outputs) > current_tool_index:
+        tool_output = tool_outputs[current_tool_index]
+    
+    return {'tool_output': tool_output,"current_tool_index": current_tool_index}
+
+def process_tool_output(state):
+    if state['tool_output'] is None:
+        state['current_tool_index'] = -1
+        state['tool_output'] = None
+        state['tool_outputs']=[]
+        return "model"
     data= state['tool_output'].content
     print('------data------')
     print(data)
     token_count = estimate_token_count(data)
     print('------token_count------')
     print(token_count)
-    if token_count > 20000:
+    if token_count > 10000:
         return "chunking"
     else:
         return "normal"
@@ -151,7 +169,7 @@ def model_node(state):
     messages = state["messages"]
     session_id = state.get("session_id")
     print('------messages------')
-    # log_messages(messages)
+    log_messages(messages)
     bound_model = state.get("bound_model")
     
     if not bound_model:
@@ -217,46 +235,51 @@ def edge_router(state):
     messages = state["messages"]
     last_message = messages[-1]
 
+    # Check if the last message has tool calls that haven't been processed yet
     if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
         return "tools"
 
+    # Check for final answer indicators
     if hasattr(last_message, "content") and (
         "final answer" in last_message.content.lower() or
         "here is the answer" in last_message.content.lower() or
         "summary" in last_message.content.lower()
     ):
+        print("[EDGE_ROUTER] Final answer detected. Routing to end.")
         return "end"
 
+    print("[EDGE_ROUTER] No tool calls or final answer. Routing to end.")
     return "end"
 
 def add_tool_messages_node(state):
     """Add tool messages to conversation and clear tool output"""
     print('------add_tool_messages_node------')
     session_id = state.get("session_id")
-    tool_messages = [state['tool_output']] if state['tool_output'] else []
-    print('------tool_messages------')
-    print(f'Adding {len(tool_messages)} tool messages to conversation')
     
+    # Handle tool_output as array of ToolMessage objects
+    tool_message = state['tool_output'] if state['tool_output'] else None
+    print('------tool_messages------')
+    if tool_message is None:
+        return {}
     # Save tool messages to database if session_id is available
-    if session_id and tool_messages:
+    if session_id and tool_message:
         try:
-            for tool_message in tool_messages:
-                save_message(
-                    session_id=session_id,
-                    message_type="ToolMessage",
-                    content={
-                        "content": tool_message.content,
-                        "tool_call_id": getattr(tool_message, 'tool_call_id', '')
-                    },
-                    metadata={"node": "add_tool_messages_node", "timestamp": str(datetime.now())}
-                )
-            print(f"[ADD_TOOL_MESSAGES] Saved {len(tool_messages)} tool messages to session {session_id}")
+            save_message(
+                session_id=session_id,
+                message_type="ToolMessage",
+                content={
+                    "content": tool_message.content,
+                    "tool_call_id": getattr(tool_message, 'tool_call_id', '')
+                },
+                metadata={"node": "add_tool_messages_node", "timestamp": str(datetime.now())}
+            )
+            print(f"[ADD_TOOL_MESSAGE] Saved  tool message to session {session_id}")
         except Exception as e:
-            print(f"[ADD_TOOL_MESSAGES] Failed to save tool messages: {e}")
+            print(f"[ADD_TOOL_MESSAGE] Failed to save tool message: {e}")
     
     return {
         "tool_output": None,
-        "messages":  tool_messages
+        "messages":  [tool_message]
     }
 # Create the graph
 workflow = StateGraph(AgentState)
@@ -266,7 +289,7 @@ workflow.add_node("tools", tool_node_wrapper)
 workflow.add_node("router", router)
 workflow.add_node("discover_schema", schema_discovery_wrapper)
 workflow.add_node("add_tool_messages", add_tool_messages_node)
-
+workflow.add_node("select_tool_output", select_tool_output)
 # Set up the workflow: tool_selection -> model -> router -> tools -> model
 workflow.add_edge("tool_selection", "model")
 workflow.add_edge("model", "router")
@@ -278,16 +301,18 @@ workflow.add_conditional_edges(
           "end": END
       }
   )
+workflow.add_edge("tools", "select_tool_output")
 workflow.add_conditional_edges(
-    "tools",
-    should_chunk,
-    {
+    "select_tool_output",
+    process_tool_output,
+    {"model": "model",
         "chunking": "discover_schema",
         "normal": "add_tool_messages"
     }
 )
-workflow.add_edge("discover_schema", "model")
-workflow.add_edge("add_tool_messages", "model")
+
+workflow.add_edge("discover_schema","select_tool_output")
+workflow.add_edge("add_tool_messages", "select_tool_output")
 # workflow.add_edge("tools", "model")
 workflow.set_entry_point("tool_selection")
 app = workflow.compile()
@@ -312,7 +337,7 @@ def run_planner_react_agent(user_input: str, session_id: str = None, existing_me
             "session_id": session_id,
             "messages": messages,
             "tools": [],
-            "tool_output": None
+            "tool_output": []  # Initialize as empty array instead of None
         }
         # Save the human message to database
         result = app.invoke(state, config={"recursion_limit": 50})
