@@ -54,7 +54,7 @@ class DPSNIntelligenceTool(BaseTool):
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": api_token,
-                "User-Agent": "DPSN-Agentic-Framework/1.0"
+                "User-Agent": "DeepSense/1.0"
             }
             
             # Make API request

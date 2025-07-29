@@ -1,4 +1,4 @@
-# DPSN-AGENTIC-FRAMEWORK 
+# DeepSense
 
 An agentic LLM orchestration framework built on DPSN  giving your AI agents a real-time edge. DPSN enables agents to access, stream, and act on live or most recent data for answering user queries, executing tasks, or chaining actions with awareness of up-to-date context.
 
@@ -15,7 +15,7 @@ An agentic LLM orchestration framework built on DPSN  giving your AI agents a re
 
 ```bash
 git clone <your-repository-url>
-cd dpsn-agentic-framework
+cd deepsense
 ```
 
 ### 2. Set Up Virtual Environment (Ubuntu)
@@ -341,7 +341,7 @@ python3 -c "from utils.db_utils import init_database; init_database()"
 ### 11. Project Structure
 
 ```
-dpsn-agentic-framework/
+deepsense/
 ├── api/                   # FastAPI server implementation
 ├── graph/                 # Main workflow definitions
 ├── tools/                 # Tool implementations
