@@ -10,8 +10,7 @@ import json
 import os
 from datetime import datetime
 # Import Helius data source
-from datasource.helius_source import HeliusDataSource, create_helius_source
-from datasource import datasource_manager
+from datasource.helius_source import create_helius_source
 
 class HeliusToolInput(BaseModel):
     action: str = Field(
@@ -83,17 +82,24 @@ class HeliusTool(BaseTool):
     """
     args_schema: type = HeliusToolInput
     
+    def __init__(self):
+        super().__init__()
+        self._helius_source = None
+    
+    def _get_helius_source(self):
+        """Get or create Helius data source."""
+        if self._helius_source is None:
+            api_key = os.getenv("HELIUS_API_KEY")
+            if not api_key:
+                raise ValueError("HELIUS_API_KEY environment variable not set")
+            self._helius_source = create_helius_source(api_key)
+        return self._helius_source
+    
     def _run(self, action: str, **kwargs) -> str:
         """Run Helius blockchain data query."""
         try:
-            # Get or create Helius data source
-            helius_source = datasource_manager.get_source("helius_mainnet")
-            if not helius_source:
-                api_key = os.getenv("HELIUS_API_KEY")
-                if not api_key:
-                    return "Error: HELIUS_API_KEY environment variable not set"
-                helius_source = create_helius_source(api_key)
-                datasource_manager.register_source("helius_mainnet", helius_source)
+            # Get Helius data source
+            helius_source = self._get_helius_source()
             
             # Execute the requested action
             if action == "account_info":
@@ -226,7 +232,7 @@ class HeliusTool(BaseTool):
             return f"Error executing {action}: {result['error']}"
         
         # Only include action, network, timestamp, and data
-        formatted_response =result
+        formatted_response = result
         
         return formatted_response
 

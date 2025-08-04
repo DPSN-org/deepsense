@@ -7,12 +7,12 @@ import os
 import json
 import requests
 from typing import Dict, Any, List, Optional
-from .core import RESTDataSource, DataSourceConfig
+from .core import DataSource, DataSourceConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
-class NewsDataSource(RESTDataSource):
+class NewsDataSource(DataSource):
     """Data source for news articles via NewsAPI.
     
     This data source provides comprehensive access to news articles through
@@ -38,11 +38,20 @@ class NewsDataSource(RESTDataSource):
     def __init__(self, api_key: str):
         config = DataSourceConfig(
             name="news",
-            base_url="https://newsapi.org/v2",
-            api_key=api_key
+            rest_url="https://newsapi.org/v2",
+            params={"apiKey": api_key}
         )
         super().__init__(config)
         self.api_key = api_key
+    
+    def health_check(self) -> bool:
+        """Check if the NewsAPI is accessible."""
+        try:
+            response = self.session.get("https://newsapi.org/v2/top-headlines?country=us&pageSize=1", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Health check failed for {self.config.name}: {e}")
+            return False
     
     def get_top_headlines(self, country: str = "us", category: Optional[str] = None, 
                          page_size: int = 20, page: int = 1) -> Dict[str, Any]:
@@ -66,8 +75,7 @@ class NewsDataSource(RESTDataSource):
         params = {
             "country": country,
             "pageSize": page_size,
-            "page": page,
-            "apiKey": self.config.api_key
+            "page": page
         }
         if category:
             params["category"] = category
@@ -101,8 +109,7 @@ class NewsDataSource(RESTDataSource):
             "language": language,
             "sortBy": sort_by,
             "pageSize": page_size,
-            "page": page,
-            "apiKey": self.config.api_key
+            "page": page
         }
         if from_date:
             params["from"] = from_date
@@ -134,8 +141,7 @@ class NewsDataSource(RESTDataSource):
             "language": language,
             "sortBy": sort_by,
             "pageSize": page_size,
-            "page": page,
-            "apiKey": self.config.api_key
+            "page": page
         }
         return self.get_data("everything", params)
     
@@ -156,7 +162,7 @@ class NewsDataSource(RESTDataSource):
             - Countries and credibility info
             - Source metadata and status
         """
-        params = {"apiKey": self.config.api_key}
+        params = {}
         if category:
             params["category"] = category
         if language:
@@ -189,8 +195,7 @@ class NewsDataSource(RESTDataSource):
             "language": language,
             "sortBy": sort_by,
             "pageSize": page_size,
-            "page": page,
-            "apiKey": self.config.api_key
+            "page": page
         }
         return self.get_data("everything", params)
     
@@ -211,8 +216,7 @@ class NewsDataSource(RESTDataSource):
         """
         params = {
             "country": country,
-            "pageSize": page_size,
-            "apiKey": self.config.api_key
+            "pageSize": page_size
         }
         return self.get_data("top-headlines", params)
     
@@ -237,8 +241,7 @@ class NewsDataSource(RESTDataSource):
             "q": query,
             "language": language,
             "sortBy": "relevancy",
-            "pageSize": page_size,
-            "apiKey": self.config.api_key
+            "pageSize": page_size
         }
         return self.get_data("everything", params)
 

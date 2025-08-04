@@ -7,12 +7,12 @@ import os
 import json
 import requests
 from typing import Dict, Any, List, Optional
-from .core import RESTDataSource, DataSourceConfig
+from .core import DataSource, DataSourceConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
-class GitHubDataSource(RESTDataSource):
+class GitHubDataSource(DataSource):
     """Data source for GitHub repository and user data via GitHub API.
     
     This data source provides comprehensive access to GitHub data through
@@ -43,12 +43,20 @@ class GitHubDataSource(RESTDataSource):
             
         config = DataSourceConfig(
             name="github",
-            base_url="https://api.github.com",
-            api_key=api_key,
+            rest_url="https://api.github.com",
             headers=headers
         )
         super().__init__(config)
         self.api_key = api_key
+    
+    def health_check(self) -> bool:
+        """Check if the GitHub API is accessible."""
+        try:
+            response = self.session.get("https://api.github.com/zen", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Health check failed for {self.config.name}: {e}")
+            return False
     
     def get_repository_info(self, owner: str, repo: str) -> Dict[str, Any]:
         """Get comprehensive information about a GitHub repository.

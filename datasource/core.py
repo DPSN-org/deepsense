@@ -20,52 +20,98 @@ logger = logging.getLogger(__name__)
 class DataSourceConfig:
     """Configuration for a data source."""
     name: str
-    base_url: str
-    api_key: Optional[str] = None
-    param_api_key: Optional[str] = None
+    rest_url: Optional[str] = None
+    rpc_url: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
+    params: Optional[Dict[str, Any]] = None
     rate_limit: Optional[int] = None  # requests per minute
     timeout: int = 30
 
 class DataSource(ABC):
-    """Abstract base class for data sources."""
+    """Base class for data sources."""
     
     def __init__(self, config: DataSourceConfig):
         self.config = config
         self.session = requests.Session()
         if config.headers:
             self.session.headers.update(config.headers)
-        if config.param_api_key:
-            self.session.params.update({"api-key": config.param_api_key})
-    @abstractmethod
-    def get_data(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Retrieve data from the data source."""
-        pass
+        if config.params:
+            self.session.params.update(config.params)
     
-    def health_check(self) -> bool:
-        """Check if the data source is accessible."""
-        try:
-            response = self.session.get(self.config.base_url, timeout=5)
-            return response.status_code == 200
-        except Exception as e:
-            logger.error(f"Health check failed for {self.config.name}: {e}")
-            return False
-
-class RESTDataSource(DataSource):
-    """Standard REST API data source."""
-    
-    def get_data(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Retrieve data from REST API endpoint."""
-        url = f"{self.config.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Make a GET request to the data source."""
+        if not self.config.rest_url:
+            return {"error": f"No REST URL configured for {self.config.name}"}
+        
+        url = f"{self.config.rest_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        
+        # Combine config params with user params
+        request_params = {}
+        if self.config.params:
+            request_params.update(self.config.params)
+        if params:
+            request_params.update(params)
         
         try:
-            response = self.session.get(url, params=params, timeout=self.config.timeout)
-            print(response.json())
+            response = self.session.get(url, params=request_params, timeout=self.config.timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed for {self.config.name}: {e}")
+            logger.error(f"GET request failed for {self.config.name}: {e}")
             return {"error": str(e), "source": self.config.name}
+    
+    def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Make a POST request to the data source."""
+        if not self.config.rest_url:
+            return {"error": f"No REST URL configured for {self.config.name}"}
+        
+        url = f"{self.config.rest_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        
+        # Combine config params with user params
+        request_params = {}
+        if self.config.params:
+            request_params.update(self.config.params)
+        if params:
+            request_params.update(params)
+        
+        try:
+            response = self.session.post(url, json=data, params=request_params, timeout=self.config.timeout)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"POST request failed for {self.config.name}: {e}")
+            return {"error": str(e), "source": self.config.name}
+    
+    def rpc_post(self, method: str, params: Any, rpc_url: Optional[str] = None) -> Dict[str, Any]:
+        """Make a JSON-RPC POST request to the data source."""
+        url = rpc_url or self.config.rpc_url
+        if not url:
+            return {"error": f"No RPC URL configured for {self.config.name}"}
+        
+        data = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params
+        }
+        
+        try:
+            response = self.session.post(url, json=data, timeout=self.config.timeout)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"RPC POST request failed for {self.config.name}: {e}")
+            return {"error": str(e), "source": self.config.name}
+    
+    def get_data(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Retrieve data from the data source."""
+        # Default implementation - can be overridden by subclasses
+        return self.get(endpoint, params)
+    
+    @abstractmethod
+    def health_check(self) -> bool:
+        """Check if the data source is accessible."""
+        pass
 
 class DataSourceManager:
     """Manages multiple data sources and provides unified access."""

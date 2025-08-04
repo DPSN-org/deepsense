@@ -4,7 +4,7 @@ Provides unified access to various data sources for real-time information.
 """
 
 # Core data source infrastructure
-from .core import DataSource, RESTDataSource, DataSourceConfig, DataSourceManager
+from .core import DataSource, DataSourceConfig, DataSourceManager
 
 # Individual data source classes
 from .crypto_source import CoinGeckoDataSource, create_coingecko_source
@@ -27,7 +27,6 @@ datasource_manager = DataSourceManager()
 __all__ = [
     # Core infrastructure
     "DataSource",
-    "RESTDataSource",
     "DataSourceConfig", 
     "DataSourceManager",
     

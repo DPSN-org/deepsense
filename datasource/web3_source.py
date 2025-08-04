@@ -7,12 +7,12 @@ import os
 import json
 import requests
 from typing import Dict, Any, List, Optional
-from .core import RESTDataSource, DataSourceConfig
+from .core import DataSource, DataSourceConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
-class Web3DataSource(RESTDataSource):
+class Web3DataSource(DataSource):
     """Data source for Ethereum blockchain data via Etherscan API.
     
     This data source provides comprehensive access to Ethereum blockchain data through
@@ -39,13 +39,22 @@ class Web3DataSource(RESTDataSource):
         base_url = self._get_base_url(network)
         config = DataSourceConfig(
             name=f"web3_{network}",
-            base_url=base_url,
-            api_key=api_key,
+            rest_url=base_url,
+            params={"apikey": api_key},
             headers={"Content-Type": "application/json"}
         )
         super().__init__(config)
         self.network = network
         self.api_key = api_key
+    
+    def health_check(self) -> bool:
+        """Check if the Etherscan API is accessible."""
+        try:
+            response = self.session.get(f"{self.config.rest_url}/api?module=proxy&action=eth_blockNumber&apikey={self.api_key}", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Health check failed for {self.config.name}: {e}")
+            return False
     
     def _get_base_url(self, network: str) -> str:
         """Get the appropriate base URL for the network."""
@@ -80,8 +89,7 @@ class Web3DataSource(RESTDataSource):
             "address": address,
             "startblock": start_block,
             "endblock": end_block,
-            "sort": "desc",
-            "apikey": self.config.api_key
+            "sort": "desc"
         }
         return self.get_data("api", params)
     
@@ -105,8 +113,7 @@ class Web3DataSource(RESTDataSource):
             "module": "account",
             "action": "tokentx",
             "address": address,
-            "sort": "desc",
-            "apikey": self.config.api_key
+            "sort": "desc"
         }
         if contract_address:
             params["contractaddress"] = contract_address
@@ -126,8 +133,7 @@ class Web3DataSource(RESTDataSource):
         """
         params = {
             "module": "gastracker",
-            "action": "gasoracle",
-            "apikey": self.config.api_key
+            "action": "gasoracle"
         }
         return self.get_data("api", params)
     
@@ -149,8 +155,7 @@ class Web3DataSource(RESTDataSource):
         params = {
             "module": "contract",
             "action": "getabi",
-            "address": contract_address,
-            "apikey": self.config.api_key
+            "address": contract_address
         }
         return self.get_data("api", params)
     
@@ -172,8 +177,7 @@ class Web3DataSource(RESTDataSource):
         params = {
             "module": "contract",
             "action": "getsourcecode",
-            "address": contract_address,
-            "apikey": self.config.api_key
+            "address": contract_address
         }
         return self.get_data("api", params)
     
@@ -194,8 +198,7 @@ class Web3DataSource(RESTDataSource):
             "module": "account",
             "action": "balance",
             "address": address,
-            "tag": "latest",
-            "apikey": self.config.api_key
+            "tag": "latest"
         }
         return self.get_data("api", params)
     
@@ -219,8 +222,7 @@ class Web3DataSource(RESTDataSource):
             "action": "tokenbalance",
             "contractaddress": contract_address,
             "address": address,
-            "tag": "latest",
-            "apikey": self.config.api_key
+            "tag": "latest"
         }
         return self.get_data("api", params)
     
@@ -243,8 +245,7 @@ class Web3DataSource(RESTDataSource):
             "module": "proxy",
             "action": "eth_getBlockByNumber",
             "tag": hex(block_number),
-            "boolean": "true",
-            "apikey": self.config.api_key
+            "boolean": "true"
         }
         return self.get_data("api", params)
     
@@ -266,8 +267,7 @@ class Web3DataSource(RESTDataSource):
         params = {
             "module": "proxy",
             "action": "eth_getTransactionByHash",
-            "txhash": tx_hash,
-            "apikey": self.config.api_key
+            "txhash": tx_hash
         }
         return self.get_data("api", params)
 

@@ -7,12 +7,12 @@ import os
 import json
 import requests
 from typing import Dict, Any, List, Optional
-from .core import RESTDataSource, DataSourceConfig
+from .core import DataSource, DataSourceConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
-class CoinGeckoDataSource(RESTDataSource):
+class CoinGeckoDataSource(DataSource):
     """Data source for cryptocurrency market data via CoinGecko API.
     
     This data source provides comprehensive access to cryptocurrency market data through
@@ -39,10 +39,19 @@ class CoinGeckoDataSource(RESTDataSource):
     def __init__(self):
         config = DataSourceConfig(
             name="coingecko",
-            base_url="https://api.coingecko.com/api/v3",
+            rest_url="https://api.coingecko.com/api/v3",
             headers={"Content-Type": "application/json"}
         )
         super().__init__(config)
+    
+    def health_check(self) -> bool:
+        """Check if the CoinGecko API is accessible."""
+        try:
+            response = self.session.get("https://api.coingecko.com/api/v3/ping", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Health check failed for {self.config.name}: {e}")
+            return False
     
     def get_coin_price(self, coin_id: str, vs_currency: str = "usd") -> Dict[str, Any]:
         """Get current price and market data for a specific cryptocurrency.
