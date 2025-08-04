@@ -26,6 +26,9 @@ Capabilities:
    - Or invoke a tool to complete the task (e.g., code execution, data retrieval)
 4. Aggregate all results and present a clear, final response
 
+🧠 Tool Selection for Data Retrieval:
+- When selecting a tool , make sure to provide the purpose of data to be retrieved from tool in the tool call arguments as reason .
+
 🔧 Sandbox Tool:
 - Use the `sandbox_code_tool` tool to run llm-generated code securely in isolated environments
 - Supported runtimes:

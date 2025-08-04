@@ -55,7 +55,7 @@ tool_node = ToolNode(all_tools)
 #         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
 #     )
 model = ChatOpenAI(
-    model="gpt-4o",  # Current version, higher rate limits
+    model=os.getenv("OPENAI_MODEL", "gpt-4o"),  
     temperature=0,
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
@@ -76,6 +76,8 @@ class AgentState(TypedDict):
     bound_model: Any  # Track bound model in state
     tools_bound: bool  # Flag to track if tools are already bound
     current_tool_index: int
+    latest_ai_message: AIMessage | None # Latest AI message for reasoning extraction
+    db_store: bool  # Flag to control database storage, defaults to True
 
 
 
@@ -115,8 +117,14 @@ def select_tool_output(state):
     tool_output =None
     if len(tool_outputs) !=0  and  len(tool_outputs) > current_tool_index:
         tool_output = tool_outputs[current_tool_index]
-    
-    return {'tool_output': tool_output,"current_tool_index": current_tool_index}
+    latest_ai_message = None
+    messages = state.get("messages", [])
+
+    for msg in reversed(messages):
+        if hasattr(msg, '__class__') and msg.__class__.__name__ == 'AIMessage':
+            latest_ai_message = msg
+            break
+    return {'tool_output': tool_output,"current_tool_index": current_tool_index ,'latest_ai_message':latest_ai_message }
 
 def process_tool_output(state):
     if state['tool_output'] is None:
@@ -124,6 +132,20 @@ def process_tool_output(state):
         state['tool_output'] = None
         state['tool_outputs']=[]
         return "model"
+    
+    # # Get the latest AI message for reasoning extraction
+    # messages = state.get("messages", [])
+    # latest_ai_message = None
+    # for msg in reversed(messages):
+    #     if hasattr(msg, '__class__') and msg.__class__.__name__ == 'AIMessage':
+    #         latest_ai_message = msg
+    #         break
+    
+    # # Add the latest AI message to state for schema_discovery_wrapper
+    # if latest_ai_message:
+    #     state['latest_ai_message'] = latest_ai_message
+    #     print('------latest_ai_message------')
+    #     print(latest_ai_message)
     data= state['tool_output'].content
     print('------data------')
     print(data)
@@ -182,8 +204,9 @@ def model_node(state):
     # Use the pre-bound model
     response = bound_model.invoke(messages)
 
-    # Save the new AI message to database if session_id is available
-    if session_id:
+    # Save the new AI message to database if session_id is available and db_store is True
+    db_store = state.get("db_store", True)
+    if session_id and db_store:
         try:
             # Prepare content with both message content and tool_calls if present
             content_dict = {"content": response.content}
@@ -199,6 +222,8 @@ def model_node(state):
             print(f"[MODEL_NODE] Saved AI message to session {session_id}")
         except Exception as e:
             print(f"[MODEL_NODE] Failed to save AI message: {e}")
+    elif not db_store:
+        print(f"[MODEL_NODE] Database storage disabled (db_store=False)")
     
     return {"messages": [response]}
 # Router node
@@ -267,8 +292,9 @@ def add_tool_messages_node(state):
     print('------tool_messages------')
     if tool_message is None:
         return {}
-    # Save tool messages to database if session_id is available
-    if session_id and tool_message:
+    # Save tool messages to database if session_id is available and db_store is True
+    db_store = state.get("db_store", True)
+    if session_id and tool_message and db_store:
         try:
             save_message(
                 session_id=session_id,
@@ -279,9 +305,11 @@ def add_tool_messages_node(state):
                 },
                 metadata={"node": "add_tool_messages_node", "timestamp": str(datetime.now())}
             )
-            print(f"[ADD_TOOL_MESSAGE] Saved  tool message to session {session_id}")
+            print(f"[ADD_TOOL_MESSAGE] Saved tool message to session {session_id}")
         except Exception as e:
             print(f"[ADD_TOOL_MESSAGE] Failed to save tool message: {e}")
+    elif not db_store:
+        print(f"[ADD_TOOL_MESSAGE] Database storage disabled (db_store=False)")
     
     return {
         "tool_output": None,
@@ -323,10 +351,10 @@ workflow.add_edge("add_tool_messages", "select_tool_output")
 workflow.set_entry_point("tool_selection")
 app = workflow.compile()
 
-def run_planner_react_agent(user_input: str, session_id: str = None, existing_messages: List[BaseMessage] = None) -> str:
+def run_planner_react_agent(user_input: str, session_id: str = None, existing_messages: List[BaseMessage] = None, db_store: bool = True) -> str:
     try:
         # Generate session_id if not provided and create session in database
-        if not session_id:
+        if not session_id and db_store:
             session_id = create_session()
        
         
@@ -343,7 +371,8 @@ def run_planner_react_agent(user_input: str, session_id: str = None, existing_me
             "session_id": session_id,
             "messages": messages,
             "tools": [],
-            "tool_output": []  # Initialize as empty array instead of None
+            "tool_output": [],  # Initialize as empty array instead of None
+            "db_store": db_store     # Default to True for database storage
         }
         # Save the human message to database
         result = app.invoke(state, config={"recursion_limit": 50})

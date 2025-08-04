@@ -68,29 +68,24 @@ def run_tests():
     print("🚀 Starting workflow tests with session management...")
     
     # Setup test session
-    session_id = setup_test_session()
-    if not session_id:
-        print("❌ Cannot proceed without valid session")
-        return
+    session_id = None
     
     try:
         # Test 1: Simple query to test message cleanup
-        query = f"what is the account balance for Solana wallet {SOLANA_WALLET}"
+        query = f"what are the nft holdings for Solana wallet {SOLANA_WALLET}"
         # query ="Execute Python code that prints numbers 1 to 5."
         print(f"\n📝 Query: {query}")
         print(f"🆔 Session ID: {session_id}")
         
         # Save query as human message before running planner agent
         print(f"\n💾 Saving query as HumanMessage...")
-        if not save_query_as_human_message(session_id, query):
-            print("❌ Failed to save query, but continuing with test...")
-        
+        if  session_id  :
+            save_query_as_human_message(session_id, query)        
         # Show messages after saving query
-        print(f"\n📋 Messages after saving query:")
         
         # Run planner agent with session
         print(f"\n🤖 Running planner agent...")
-        result = run_planner_react_agent(query, session_id=session_id)
+        result = run_planner_react_agent(query, session_id=session_id, db_store=False)
         
         # Display result
         if result and 'messages' in result and result['messages']:
