@@ -138,24 +138,7 @@ def save_langgraph_message_to_db(session_id: str, message, metadata: Dict[str, A
     
     return save_message(session_id, message_type, content, metadata)
 
-@app.get("/")
-async def root():
-    """Root endpoint with API information."""
-    return {
-        "message": "LangGraph Assistant API",
-        "version": "1.0.0",
-        "description": "A LangGraph-powered assistant with session management and advanced processing capabilities",
-        "endpoints": {
-            "/query": "POST - Process a natural language query",
-            "/sessions": "POST - Create a new session",
-            "/sessions/{session_id}": "GET - Get session information",
-            "/sessions/{session_id}/messages": "GET - Get session messages (excludes nested subgraphs by default)",
-            "/sessions/{session_id}/messages/clean": "GET - Get session messages (explicitly excludes nested subgraphs)",
-            "/sessions/{session_id}/messages/full": "GET - Get all session messages (includes nested subgraphs)",
-            "/sessions/{session_id}": "DELETE - Delete a session",
-            "/users/{user_id}/sessions": "GET - Get user sessions",
-        }
-    }
+
 
 
 
