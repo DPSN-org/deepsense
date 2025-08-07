@@ -183,7 +183,7 @@ def process_tool_output(state):
     token_count = estimate_token_count(data)
     print('------token_count------')
     print(token_count)
-    if token_count > 10000:
+    if token_count > 15000:
         return "chunking"
     else:
         return "normal"
@@ -223,7 +223,7 @@ def model_node(state):
     messages = state["messages"]
     session_id = state.get("session_id")
     print('------messages------')
-    log_messages(messages)
+    #log_messages(messages)
     bound_model = state.get("bound_model")
     
     if not bound_model:
