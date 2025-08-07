@@ -53,10 +53,11 @@ class ToolResult(BaseModel):
     result: Dict[str, Any]
 
 class QueryResponse(BaseModel):
+    user_actions: List[Dict[str, Any]] = []
     query: str
     response: str
     session_id: str
-    tool_results: List[ToolResult]
+    tool_results: List[ToolResult] 
     conversation_length: int
     success: bool = True
     error: Optional[str] = None
@@ -238,7 +239,7 @@ async def process_user_query(request: QueryRequest):
                     args=tr["args"],
                     result=tr["result"]
                 ))
-        
+        user_actions = result.get('user_actions', [])
         # Get the final response
         final_response = ""
         if result and 'messages' in result and result['messages']:
@@ -247,6 +248,7 @@ async def process_user_query(request: QueryRequest):
                 final_response = last_message.content
         
         return QueryResponse(
+            user_actions=user_actions,
             query=request.query,
             response=final_response,
             session_id=session_id,

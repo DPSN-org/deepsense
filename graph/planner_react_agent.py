@@ -16,6 +16,7 @@ from tools.weather_tool import get_weather
 from tools.flight_tool import find_flights
 from tools.location_tool import get_location_codes
 from tools.dpsn_intelligence_tool import dpsn_intelligence_tool
+from tools.jupiter_tools import jupiter_tools
 from langchain_core.tools import tool
 from graph.system_prompt import get_system_prompt
 # You can add more tools, e.g., from tools.price_tools import price_tools
@@ -43,7 +44,8 @@ def location_tool(keyword: str, sub_type: str = "CITY,AIRPORT"):
     return get_location_codes(keyword, sub_type)
 
 # Combine all tools - simple version to avoid rate limits
-all_tools = helius_tools + datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool, dpsn_intelligence_tool]# Just the main Helius tool for Solana queries
+
+all_tools = helius_tools + jupiter_tools+ datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool, dpsn_intelligence_tool]# Just the main Helius tool for Solana queries
 
 # Create the tool node
 tool_node = ToolNode(all_tools)
@@ -78,6 +80,7 @@ class AgentState(TypedDict):
     current_tool_index: int
     latest_ai_message: AIMessage | None # Latest AI message for reasoning extraction
     db_store: bool  # Flag to control database storage, defaults to True
+    user_actions: List[Dict[str, Any]] | [] # Track user actions like quote requests
 
 
 
@@ -115,8 +118,35 @@ def select_tool_output(state):
     tool_outputs = state['tool_outputs']
     current_tool_index +=1
     tool_output =None
+    user_actions = state.get("user_actions", [])
+
     if len(tool_outputs) !=0  and  len(tool_outputs) > current_tool_index:
         tool_output = tool_outputs[current_tool_index]
+        
+        # Check if this tool output contains a quote action
+        if tool_output and hasattr(tool_output, 'content'):
+            try:
+                # Try to parse the content as JSON
+                content_data = json.loads(tool_output.content)
+                
+                # Check if it's a Jupiter tool response with user_action
+                if isinstance(content_data, dict) and content_data.get("user_action") == True:
+                    # This is a quote action, add it to user_actions
+                    
+                    # Create action record
+                     
+                    
+                    user_actions.append(content_data)
+                    print(f"Added quote action to user_actions. Total actions: {len(user_actions)}")
+                    
+        
+                    
+                    
+            except (json.JSONDecodeError, AttributeError) as e:
+                # Content is not JSON or doesn't have expected structure
+                print(f"Tool output content is not JSON or doesn't have user_action: {e}")
+                pass
+    
     latest_ai_message = None
     messages = state.get("messages", [])
 
@@ -124,7 +154,8 @@ def select_tool_output(state):
         if hasattr(msg, '__class__') and msg.__class__.__name__ == 'AIMessage':
             latest_ai_message = msg
             break
-    return {'tool_output': tool_output,"current_tool_index": current_tool_index ,'latest_ai_message':latest_ai_message }
+    
+    return {'tool_output': tool_output,"current_tool_index": current_tool_index ,'latest_ai_message':latest_ai_message ,'user_actions':user_actions}
 
 def process_tool_output(state):
     if state['tool_output'] is None:
@@ -171,7 +202,7 @@ def tool_selection_node(state):
             break
     
     # Since we bind tools only once, we can bind ALL tools
-    all_available_tools = helius_tools + datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool, dpsn_intelligence_tool]
+    all_available_tools = helius_tools +jupiter_tools+ datasource_tools + [sandbox_code_tool, weather_tool, flight_tool, location_tool, dpsn_intelligence_tool]
     
     print(f"[TOOL_SELECTION] Binding all {len(all_available_tools)} tools for comprehensive access")
     
@@ -192,7 +223,7 @@ def model_node(state):
     messages = state["messages"]
     session_id = state.get("session_id")
     print('------messages------')
-    # log_messages(messages)
+    log_messages(messages)
     bound_model = state.get("bound_model")
     
     if not bound_model:
@@ -372,7 +403,8 @@ def run_planner_react_agent(user_input: str, session_id: str = None, existing_me
             "messages": messages,
             "tools": [],
             "tool_output": [],  # Initialize as empty array instead of None
-            "db_store": db_store     # Default to True for database storage
+            "db_store": db_store,     # Default to True for database storage
+            "user_actions": []  # Initialize empty user_actions list
         }
         # Save the human message to database
         result = app.invoke(state, config={"recursion_limit": 50})

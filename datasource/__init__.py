@@ -11,6 +11,7 @@ from .crypto_source import CoinGeckoDataSource, create_coingecko_source
 from .news_source import NewsDataSource, create_news_source
 from .github_source import GitHubDataSource, create_github_source
 from .helius_source import HeliusDataSource, create_helius_source
+from .jupiter_source import JupiterDataSource, create_jupiter_source
 
 # Convenience functions and registry
 from .sources import (
@@ -35,12 +36,14 @@ __all__ = [
     "NewsDataSource",
     "GitHubDataSource",
     "HeliusDataSource",
+    "JupiterDataSource",
     
     # Factory functions
     "create_coingecko_source",
     "create_news_source",
     "create_github_source",
     "create_helius_source",
+    "create_jupiter_source",
     
     # Convenience functions
     "create_all_sources",

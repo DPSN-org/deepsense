@@ -56,6 +56,7 @@ class HeliusToolInput(BaseModel):
     commitment: Optional[str] = Field(default=None, description="For 'transactions' action, how finalized a block must be to be included in the search (e.g., 'finalized', 'confirmed', 'processed').")
     rpc_method_name: Optional[str] = Field(default=None, description="Solana RPC method name (e.g., 'getAccountInfo', 'getBalance')")
     rpc_method_params: Optional[List[Any]] = Field(default=None, description="Parameters array for the RPC method")
+    reason:str = Field(default=None, description="Purpose of calling the tool ")
 
 class HeliusTool(BaseTool):
     """Unified tool for Helius blockchain data access."""
