@@ -46,6 +46,7 @@ class QueryRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    remarks: Optional[List[str]] = None
 
 class ToolResult(BaseModel):
     tool_name: str
@@ -139,6 +140,15 @@ def save_langgraph_message_to_db(session_id: str, message, metadata: Dict[str, A
     return save_message(session_id, message_type, content, metadata)
 
 
+def build_final_query(query, remarks):
+    if remarks:
+        context = "\n- ".join(remarks)
+        return f"""{query}
+
+Optional Context (if needed ):
+- {context}"""
+    return query
+
 
 
 
@@ -197,10 +207,10 @@ async def process_user_query(request: QueryRequest):
             )
         except Exception as e:
             print(f"[API] Failed to save human message: {e}")
-        
+        final_query = build_final_query(request.query, request.remarks)
         # Process the query with session context
         result = run_planner_react_agent(
-            user_input=request.query,
+            user_input=final_query,
             session_id=session_id,
             existing_messages=existing_messages
         )
