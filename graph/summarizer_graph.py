@@ -15,12 +15,15 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from utils.s3_utils import  upload_json_to_s3
 from utils.db_utils import save_message
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ---- STATE TYPE ----
 
 class SchemaDiscoveryState(TypedDict, total=False):
     pending_chunks: List[str]   
-    current_chunk : str         # Raw JSON chunks (as strings)
+    current_chunk : str    
+    current_chunks : List[str] 
+    parallel_chunks : List[List[str]]    # Raw JSON chunks (as strings)
     partial_schemas: List[dict]          # Intermediate schema JSONs
     final_schema: dict    
     final_summary: str 
@@ -40,7 +43,12 @@ class SchemaDiscoveryState(TypedDict, total=False):
 #         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
 #     )
 model = ChatGoogleGenerativeAI(
-    model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite"),
+    model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
+    temperature=0,
+    google_api_key=os.getenv("GEMINI_API_KEY")
+)
+model_2=ChatGoogleGenerativeAI(
+    model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
     temperature=0,
     google_api_key=os.getenv("GEMINI_API_KEY")
 )
@@ -110,31 +118,25 @@ The tool was called to address the user query below. You are given a data chunk 
 
 Input:
 - Purpose of the data: {ai_message_context}
-- Previous Summary: {previous_summary}
+- Previous Summary if any: {previous_summary}
 -Suggestions for summarization: {llm_suggestions}
 
 
-Your tasks:
-1. Try to parse or extract valid JSON fields (even if the chunk is broken).
-2. If it's part of an array or object, extract usable substructures.
-3. If parsing fails, fallback to regex or heuristic extraction.
-4. Add new data to the previous summary.
-5. Note if the chunk resolves any previously missing fields or entries.
-6. If no new data is extractable, retain empty string.
-7. Focus on extracting the specific information that was requested in the suggestions.
 
-
+Instructions:
+1. When summarizing, always preserve numeric values exactly as written.Do not round, rephrase, or approximate decimals.
+2. Extract only the fields or details relevant to the purpose/suggestions.
+3. If the chunk is part of an object/array, keep usable substructures.
+4. If parsing fails, extract key-value pairs heuristically.
+5. Only add **new** information; do not re-summarize previous content.
+6. If nothing useful is found, return an empty JSON object: {{}}.
 
 Chunk:
 {chunk}
 
-Your Output:
-- A concise structured summary using data from this chunk and the previous summary.
-- If possible, format as JSON.
-- If chunk is not useful or redundant, say so.
-- If chunk fills missing fields from earlier summary, update them.
-- Focus on the specific information requested in the user query.
-
+Output:
+- Valid JSON if possible.
+- Minimal, concise, only new info.
 """)
 ])
 
@@ -203,10 +205,23 @@ def decide_processing_mode(state: SchemaDiscoveryState) -> SchemaDiscoveryState:
 
 def next_chunk(state: SchemaDiscoveryState) -> SchemaDiscoveryState:
     new_state = copy.deepcopy(state)
+
     if new_state["pending_chunks"]:
-        new_state["current_chunk"] = new_state["pending_chunks"].pop(0)
-        print("current chunk", len(new_state["current_chunk"]))
-        
+        if new_state['processing_mode'] == "summarize":
+            new_state["current_chunks"] = []
+            if new_state["pending_chunks"]:
+
+                new_state["parallel_chunks"] = [new_state["pending_chunks"][i:i + 8] for i in range(0, len(new_state["pending_chunks"]), 8)]
+            new_state["pending_chunks"] = []
+            # for _ in range(0,8):
+            #     if new_state["pending_chunks"]:
+            #         new_state["current_chunks"].append(new_state["pending_chunks"].pop(0)) 
+            print(f"Popped {len(new_state['parallel_chunks'])} chunks from pending_chunks")
+            print(f"Remaining pending chunks: {len(new_state['pending_chunks'])}")
+        else:    
+            new_state["current_chunk"] = new_state["pending_chunks"].pop(0)
+            print("current chunk", len(new_state["current_chunk"]))
+            
         # If we have LLM suggestions, apply them to the current chunk
         # if new_state.get("llm_suggestions"):
         #     suggestions = new_state["llm_suggestions"]
@@ -219,14 +234,15 @@ def next_chunk(state: SchemaDiscoveryState) -> SchemaDiscoveryState:
     return new_state
 
 def schema_from_chunks(state: SchemaDiscoveryState) -> SchemaDiscoveryState:
-    chunk = state["current_chunk"]
-    print("chunk", len(chunk))
+   
     
     # Check if we should do schema discovery or summarization
     processing_mode = state.get("processing_mode", "schema")
     print(f"Processing mode: {processing_mode}")
     
     if processing_mode == "schema":
+        chunk = state["current_chunk"]
+        print("chunk", len(chunk))
         # Original schema discovery logic
         partial_schemas = state.get("partial_schemas", [])
         partial_schema = partial_schemas[-1] if len(partial_schemas) > 0 else {}
@@ -235,6 +251,9 @@ def schema_from_chunks(state: SchemaDiscoveryState) -> SchemaDiscoveryState:
         state.setdefault("partial_schemas", []).append(result)
         print(f"Added schema result, total schemas: {len(state.get('partial_schemas', []))}")
     else:
+        parallel_chunks = state.get("parallel_chunks", [])
+
+        chunks = state.get("current_chunks", [])
         # Summarization logic
         ai_message_context = state.get("ai_message_context", "")
         # user_query = state.get("user_query", "")
@@ -246,34 +265,142 @@ def schema_from_chunks(state: SchemaDiscoveryState) -> SchemaDiscoveryState:
         
         # Get LLM suggestions safely
         llm_suggestions = state.get("llm_suggestions", [])
-        current_suggestion = llm_suggestions[-1] if len(llm_suggestions) > 0 else ''
+        current_suggestion = '\n\n'.join(llm_suggestions) if len(llm_suggestions) > 0 else ''
         
         print(f"Summarizing chunk, previous summaries: {len(summaries)}")
         
         
         
         try:
-            summarize_result = summarize_chain.invoke({
-                "chunk": chunk,
-                "ai_message_context": ai_message_context,
-                # "user_query": user_query,
-                "llm_suggestions": current_suggestion,
-                "previous_summary": previous_summary,
-            })
+            # summarize_result = summarize_chain.invoke({
+            #     "chunk": chunk,
+            #     "ai_message_context": ai_message_context,
+            #     # "user_query": user_query,
+            #     "llm_suggestions": current_suggestion,
+            #     "previous_summary": previous_summary,
+            # })
+
+            
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(parallel_summarize, c,ai_message_context,current_suggestion) for c in parallel_chunks]
+                for future in as_completed(futures):
+                    summaries += future.result()
+                    # summarize_result = parallel_summarize(chunks, ai_message_context, current_suggestion)
+            # for c in summarize_result:
+            state["summaries"]=summaries
+
+
         except Exception as e:
             print(f"Error in summarization chain: {e}")
             # Create a fallback summary
-            summarize_result ={
-                "summary": f"Error processing chunk: {str(e)}",
-              
-            }
-            print(f"Created fallback summary: {summarize_result}")
-        
-        state.setdefault("summaries", []).append(json.dumps(summarize_result))
+           
+        # state.setdefault("summaries", []).append(json.dumps(summarize_result))
         print(f"Added summary result, total summaries: {len(state.get('summaries', []))}")
     
     state["count"] += 1
     return state
+def batch_summarize(chunks):
+    return summarize_chain.batch(chunks)
+
+def summarize_chunk(chunk, ai_message_context, current_suggestion):
+    return summarize_chain.invoke({
+                "chunk": chunk,
+                "ai_message_context": ai_message_context,
+                # "user_query": user_query,
+                "llm_suggestions": current_suggestion,
+                "previous_summary": "",
+            })
+
+def parallel_summarize(chunks, ai_message_context,current_suggestion, batch_size=8):
+    summaries = []
+    batch_summaries = []
+    # with ThreadPoolExecutor(max_workers=batch_size) as executor:
+    chunks_json=[]
+    for c in chunks:
+        chunks_json.append({
+                "chunk": c,
+                "ai_message_context": ai_message_context,
+                # "user_query": user_query,
+                "llm_suggestions": current_suggestion,
+                "previous_summary": "",
+            })
+    batch_summaries = summarize_chain.batch(chunks_json,config={"max_concurrency": 10})
+    batch_summaries_json = [json.dumps(summary) for summary in batch_summaries]
+ 
+    #     futures = [executor.submit(summarize_chunk, c,ai_message_context,current_suggestion) for c in chunks]
+    #     for future in as_completed(futures):
+    #         batch_summaries.append(json.dumps(future.result()))
+    merged_summary = merge_summaries(batch_summaries_json, ai_message_context,current_suggestion ,batch=True)
+    summaries.append(merged_summary)
+    return summaries
+
+def merge_summaries(summaries, ai_message_context,current_suggestion,batch =False):
+    batch_merger_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are an assistant that merges partial summaries into a single intermediate summary."),
+    ("human", """
+Combine the following partial summaries into one concise *intermediate summary*.
+- When summarizing, always preserve numeric values exactly as written. 
+- Do NOT draw conclusions
+- Do NOT polish or finalize
+- Preserve structure and key details for the next stage
+
+Context:
+- Purpose: {ai_message_context}
+- Suggestions: {llm_suggestions}
+
+{partial_summaries}
+"""),
+])
+    merger_prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are an expert at combining and synthesizing multiple partial summaries into a comprehensive, coherent final summary."),
+                ("human", """
+ Combine and refine the following partial summaries into one cohesive summary .
+
+Context:
+- Purpose: {ai_message_context}
+- Suggestions: {llm_suggestions}
+
+Partial summaries to merge:
+{partial_summaries}
+
+Instructions:
+- When summarizing, always preserve numeric values exactly as written. 
+Do not round, rephrase, or approximate decimals.
+- use purpose context and suggestions to Combine related information from different summaries
+- Remove duplicate information
+- Ensure the final summary is well-structured based on the purpose and suggestions
+- Maintain the key insights and findings from all partial summaries
+- If there are conflicting details, note them appropriately
+
+Return a comprehensive final summary that covers all the important information from the partial summaries.
+""")
+            ])
+            
+            # Create the merger chain
+    if batch:
+        merger_chain = batch_merger_prompt | model #| JsonOutputParser()
+    else:
+        merger_chain = merger_prompt | model#| JsonOutputParser()
+            
+            # Join partial summaries with clear separators
+    partial_summaries_text = "\n\n--- PARTIAL SUMMARY ---\n\n".join(summaries)
+            
+    print(f"Merging {len(summaries)} partial summaries...")
+            
+    try:
+        # Invoke the merger chain
+        merged_result = merger_chain.invoke({
+            "partial_summaries": partial_summaries_text,
+            "ai_message_context": ai_message_context,
+            "llm_suggestions": current_suggestion
+        })
+        
+        final_summary = merged_result.content
+        print("merged_summary------------", final_summary)
+        return final_summary
+    except Exception as e:
+        print(f"Error merging summaries: {e}")
+        return f"Error merging summaries : {e}"
 
 def check_done(state: SchemaDiscoveryState) -> str:
     processing_mode = state.get("processing_mode", "schema")
@@ -299,14 +426,28 @@ def merge_and_emit_tool_message(state: SchemaDiscoveryState) -> SchemaDiscoveryS
         with open(output_filename, 'w', encoding='utf-8') as f:
             json.dump(final_schema, f, indent=2)
         print(f"Wrote schema discovery results to {output_filename}")
-        return {"final_schema": final_schema}
+        return {"final_schema": final_schema,"processing_mode": "schema"}
     else:
+        ai_message_context = state.get("ai_message_context", "")
+        llm_suggestions = state.get("llm_suggestions", [])
+        current_suggestion = '\n\n'.join(llm_suggestions) if len(llm_suggestions) > 0 else ''
+
         # Summarization logic
         summaries = state.get("summaries", [])
         if len(summaries) > 0:
-            final_summary = summaries[-1]
-            print("final_summary", final_summary)
-            return {"final_summary": final_summary}
+            # Create merger prompt and LLM chain for combining partial summaries
+            try:
+                final_summary = merge_summaries(summaries, ai_message_context,current_suggestion)
+                print("Successfully merged summaries into final summary")
+                return {"final_summary": final_summary}
+                
+            except Exception as e:
+                print(f"Error merging summaries: {e}")
+                final_summary = f"Error merging summaries : {e}"
+                # Fallback: use the last summary if merging fails
+                # final_summary = summaries[-1]
+                print("Using last summary as fallback")
+                return {"final_summary": final_summary}
         else:
             print("No summaries found, returning empty summary")
             return {"final_summary": "No summary generated"}
@@ -363,7 +504,7 @@ def schema_discovery_wrapper(agent_state: dict) -> dict:
         data = tool_output.content
         
         # Use the utility function to chunk data by tokens
-        tool_chunks = chunk_data_by_tokens(data, max_tokens=10000, model="claude-3-opus")
+        tool_chunks = chunk_data_by_tokens(data, max_tokens=5000, model="claude-3-opus")
         print("Tool chunks:", len(tool_chunks))
     
     # 3. Extract user query from messages
@@ -381,6 +522,8 @@ def schema_discovery_wrapper(agent_state: dict) -> dict:
     schema_state = {
         "pending_chunks": tool_chunks,
         "partial_schemas": [],
+        "current_chunks": [],
+        "parallel_chunks": [],
         "final_schema": {},
         "summaries": [],
         "final_summary": "",
@@ -410,31 +553,38 @@ def schema_discovery_wrapper(agent_state: dict) -> dict:
         result = {
             "data_schema": final_schema,
         }
+        print("final_schema", final_schema)
         try:
+            print("uploading to s3")
             bucket_name = os.getenv('AWS_BUCKET', 'your-test-bucket-name')
+            print("bucket_name", bucket_name)
             s3_upload = upload_json_to_s3(
                 data=data,
                 bucket_name=bucket_name,
                 key=f"test-uploads/actual_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             )
+            print("s3_upload", s3_upload)
             result["data_uri"] = s3_upload.get('https_url')
         except Exception as e:
             print(f"Error uploading to S3: {str(e)}")
-            result["data_uri"] = ""
+            raise Exception(f"Error uploading to S3: {str(e)}")
+
     else:
         final_summary = response.get("final_summary", {"Error": "No summary found"})
         result = {
             "data_summary": final_summary,
             "processing_mode": "summarize",
         }
-    
+        
     # Upload tool output content to S3
    
     
     print(f"[SCHEMA_DISCOVERY] Processing mode: {processing_mode}")
     print(f"[SCHEMA_DISCOVERY] Result: {result}")
-    
-    json_result = json.dumps(result)
+    if processing_mode == "summarize":
+        json_result=final_summary
+    else:
+        json_result = json.dumps(result)
     tool_call_id = agent_state['tool_output'].tool_call_id
     tool_msg = ToolMessage(
         tool_call_id=tool_call_id,

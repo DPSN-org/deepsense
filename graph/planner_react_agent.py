@@ -5,6 +5,7 @@ from datetime import datetime
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
 from typing import Dict, Any, List, Sequence, Annotated, Optional, TypedDict
@@ -61,7 +62,11 @@ model = ChatOpenAI(
     temperature=0,
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
-
+# gemini_model = ChatGoogleGenerativeAI(
+#     model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+#     temperature=0,
+#     google_api_key=os.getenv("GEMINI_API_KEY")
+# )
 # Cache for bound models to prevent duplication
 bound_model_cache = {}
 
@@ -76,6 +81,7 @@ class AgentState(TypedDict):
     tools: List[Dict[str, Any]]
     selected_tools: List[Any]  # Add selected_tools to state
     bound_model: Any  # Track bound model in state
+    gemini_bound_model: Any  # Track bound model in state
     tools_bound: bool  # Flag to track if tools are already bound
     current_tool_index: int
     latest_ai_message: AIMessage | None # Latest AI message for reasoning extraction
@@ -209,12 +215,13 @@ def tool_selection_node(state):
     # Bind ALL tools once here - no duplication issue since it's only called once
     bound_model = model.bind_tools(all_available_tools)
     print(f"[TOOL_SELECTION] Bound {len(all_available_tools)} tools to model")
-    
+    # gemini_bound_model = gemini_model.bind_tools(all_available_tools)
     # No need to add system prompt here, it's already at the start
     return {
          # Use messages as-is
         "selected_tools": all_available_tools,  # All tools available
         "bound_model": bound_model,
+        # "gemini_bound_model": gemini_bound_model,
         "tools_bound": True
     }
 
@@ -231,9 +238,21 @@ def model_node(state):
         bound_model = model
     
     # System prompt is already added in tool_selection_node, use messages as is
-   
-    # Use the pre-bound model
+    # Check token count of latest message
+    # latest_message = messages[-1] if messages else None
+    # if latest_message and hasattr(latest_message, 'content'):
+    #     token_count = estimate_token_count(latest_message.content,model='gpt-4o')
+    #     print(f"[MODEL_NODE] Latest message token count: {token_count}")
+        
+    #     # If token count is too high, consider chunking or summarization
+    #     if token_count > 5000:
+    #         print("[MODEL_NODE] Warning: Latest message exceeds 15k tokens")
+    #         response = gemini_bound_model.invoke(messages)
+    #     else:
     response = bound_model.invoke(messages)
+    # Use the pre-bound model
+
+    # response = bound_model.invoke(messages)
 
     # Save the new AI message to database if session_id is available and db_store is True
     db_store = state.get("db_store", True)

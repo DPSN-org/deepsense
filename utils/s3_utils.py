@@ -195,32 +195,35 @@ def upload_file_to_s3(
             upload_metadata.update(metadata)
         
         # Upload file to S3 with public read access
+        # Read file content first to ensure proper handling of binary files
         with open(file_path, 'rb') as file:
-            try:
+            file_content = file.read()
+        
+        file_size = len(file_content)
+        print(f"Uploading file of size: {file_size} bytes")
+        
+        try:
+            response = s3_client.put_object(
+                Bucket=bucket_name,
+                Key=key,
+                Body=file_content,  # Pass bytes instead of file object
+                ContentType=content_type,
+                Metadata=upload_metadata,
+                ACL='public-read'  # Make the object publicly readable
+            )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'AccessControlListNotSupported':
+                # Bucket doesn't support ACLs, upload without ACL
+                print(f"⚠️  Bucket {bucket_name} doesn't support ACLs, uploading without public-read")
                 response = s3_client.put_object(
                     Bucket=bucket_name,
                     Key=key,
-                    Body=file,
+                    Body=file_content,  # Pass bytes instead of file object
                     ContentType=content_type,
-                    Metadata=upload_metadata,
-                    ACL='public-read'  # Make the object publicly readable
+                    Metadata=upload_metadata
                 )
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'AccessControlListNotSupported':
-                    # Bucket doesn't support ACLs, upload without ACL
-                    print(f"⚠️  Bucket {bucket_name} doesn't support ACLs, uploading without public-read")
-                    response = s3_client.put_object(
-                        Bucket=bucket_name,
-                        Key=key,
-                        Body=file,
-                        ContentType=content_type,
-                        Metadata=upload_metadata
-                    )
-                else:
-                    raise
-        
-        # Get file size
-        file_size = os.path.getsize(file_path)
+            else:
+                raise
         
         # Generate S3 URL
         s3_url = f"s3://{bucket_name}/{key}"
