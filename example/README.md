@@ -86,7 +86,6 @@ The chat UI will start on `http://localhost:8080`
 
 ```bash
 # From project root
-npm run start:backend  # Start backend
 npm run start:chat-ui # Start chat UI
 ```
 
