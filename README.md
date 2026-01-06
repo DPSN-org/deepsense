@@ -267,59 +267,19 @@ See [architecture.md](architecture.md) for deployment architecture and security 
 
 ## Example Implementation
 
-See the `example/` folder for a complete implementation including:
+A complete example implementation is available in the `example/` folder, including:
 
 - Multiple datasource examples (Helius, Jupiter, CoinGecko, GitHub, etc.)
 - Workflow instance configuration
 - FastAPI server with message history management
+- Optional chat UI integration
 
-### Quick Start - Backend API
-
-```bash
-# Run the example server
-python example/server.py
-# Server runs on http://localhost:8001
-```
-
-The backend API is now available at `http://localhost:8001`. You can test it with:
-
-```bash
-curl -X POST "http://localhost:8001/query" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is the current price of bitcoin?",
-    "user_id": "user123"
-  }'
-```
-
-See `example/README.md` for detailed backend setup and usage instructions.
-
-## Optional: Chat UI
-
-For a complete frontend experience, an optional chat UI is available:
-
-**Chat UI** - React/TypeScript chat interface (from [ai-agent-ui](https://github.com/DPSN-org/ai-agent-ui))
-
-### Setup
-
-```bash
-# Install chat UI dependencies
-cd chat-ui
-npm install
-
-# Start chat UI dev server
-npm run dev
-# Chat UI runs on http://localhost:8080
-```
-
-The chat UI connects to the backend API and provides a modern web interface for interacting with the DeepSense framework.
-
-**Note:** The chat UI is optional. The backend API can be used directly or with any custom frontend. See `example/README.md` for complete setup instructions including chat UI.
+See **[Example README](example/README.md)** for complete setup and usage instructions.
 
 ## Documentation
 
 - **[Architecture](architecture.md)**: Detailed system architecture and design decisions
-- **[Example README](example/README.md)**: Example implementation guide (includes chat UI setup)
+- **[Example README](example/README.md)**: Complete example implementation guide with backend and chat UI setup
 
 ## Requirements
 
