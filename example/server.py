@@ -170,9 +170,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Allow frontend origin (default Vite dev server runs on port 8080)
+frontend_origin = os.getenv("FRONTEND_URL", "http://localhost:8080")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[frontend_origin, "http://localhost:8080", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -347,10 +349,12 @@ async def health_check():
     return {"status": "healthy"}
 
 if __name__ == "__main__":
+    # Default port 8001 to match frontend default (sandbox uses 8000)
+    port = int(os.getenv("SERVER_PORT", "8001"))
     uvicorn.run(
         "example.server:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True
     )
 

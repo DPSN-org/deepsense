@@ -272,15 +272,29 @@ See the `example/` folder for a complete implementation including:
 - Multiple datasource examples (Helius, Jupiter, CoinGecko, GitHub, etc.)
 - Workflow instance configuration
 - FastAPI server with message history management
-- Environment variable examples
+- **Frontend UI** - React/TypeScript chat interface (from [ai-agent-ui](https://github.com/DPSN-org/ai-agent-ui))
 
+### Quick Start
+
+**Backend:**
 ```bash
 # Run the example server
-cd example
-python server.py
+python example/server.py
+# Server runs on http://localhost:8001
 ```
 
-See `example/README.md` for detailed usage instructions.
+**Frontend:**
+```bash
+# Install frontend dependencies
+cd frontend
+npm install
+
+# Start frontend dev server
+npm run dev
+# Frontend runs on http://localhost:8080
+```
+
+See `example/README.md` for detailed setup and usage instructions.
 
 ## Documentation
 
