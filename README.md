@@ -1,360 +1,312 @@
-# DeepSense
+# DeepSense Framework
 
-An agentic LLM orchestration framework built on DPSN  giving your AI agents a real-time edge. DPSN enables agents to access, stream, and act on live or most recent data for answering user queries, executing tasks, or chaining actions with awareness of up-to-date context.
+An agentic LLM orchestration framework designed to provide analytical insights from connected datasources through human queries. DeepSense enables developers to build AI agents that can query multiple data sources, analyze data, execute code securely, and deliver actionable insights in natural language.
 
-## Prerequisites
+## Purpose
 
-- Ubuntu 20.04 or later
-- Python 3.8 or later
-- Git
-- Docker (optional, for containerized deployment)
+DeepSense is designed to transform human queries into analytical insights by:
 
-## Quick Start
+- **Connecting Multiple Data Sources**: Unified interface for accessing REST APIs, RPC endpoints, blockchain data, financial APIs, and external services
+- **Providing Analytical Insights**: AI agents analyze data from connected datasources to answer questions, generate reports, and provide insights
+- **Processing Human Queries**: Natural language queries are interpreted and executed across multiple datasources to deliver comprehensive answers
+- **Executing Code Securely**: Built-in sandbox tool for running LLM-generated Python and Node.js code for data analysis and visualization
+- **Maintaining Context**: MongoDB-based checkpointing for session state persistence and workflow resumption across conversations
+- **Handling Large Outputs**: Automatic chunking and schema discovery for processing large datasets and tool outputs
+- **Supporting Multiple LLMs**: Dynamic configuration for OpenAI, Anthropic, and Google Gemini models
+- **Extending Easily**: Declarative tool creation from datasource methods using `@tool` decorator
 
-### 1. Clone the Repository
+## Key Features
 
-```bash
-git clone <your-repository-url>
-cd deepsense
-```
+### 🎯 Core Capabilities
 
-### 2. Set Up Virtual Environment (Ubuntu)
+- **Workflow Orchestration**: LangGraph-based workflow engine 
+- **Declarative Tool Creation**: Define tools directly in datasource methods using `@tool` decorator
+- **Unified Tool System**: Multiple datasource methods can be grouped into unified tools with action parameters
+- **Automatic Schema Generation**: Input schemas auto-generated from method signatures
+- **Sandbox Tool**: Pre-configured secure code execution environment (Python 3.11, Node.js 20)
+- **MongoDB Checkpointing**: Persistent workflow state for session management and resumption
+- **Chunking & Summarization**: Mandatory summarizer graph for handling large outputs
+- **User Action Detection**: Automatic collection of user actions from tool outputs
+- **Dynamic LLM Support**: Configurable LLM providers (OpenAI, Anthropic, Google)
+- **Environment Auto-loading**: Automatic `.env` file loading on import
 
-#### Install Python and pip (if not already installed)
-```bash
-sudo apt update
-sudo apt install python3 python3-pip python3-venv
-```
+For detailed architecture and component documentation, see [architecture.md](architecture.md).
 
-#### Create and activate virtual environment
-```bash
-# Create virtual environment
-python3 -m venv test
-
-# Activate virtual environment
-source env/bin/activate
-
-# Verify activation (you should see (test) in your prompt)
-which python
-# Should show: /path/to/langgraph-sample/env/bin/python
-```
-
-### 3. Install Dependencies
-
-```bash
-# Make sure virtual environment is activated
-source env/bin/activate
-
-# Upgrade pip
-pip install --upgrade pip
-
-# Install all packages from requirements.txt
-pip install -r requirements.txt
-```
-
-### 4. Set Up PostgreSQL 16 Database
-
-The application requires PostgreSQL 16 for session management and message persistence. Follow these steps to set up the database:
-
-#### Install PostgreSQL 16 on Ubuntu
-
-```bash
-# Update package list
-sudo apt update
-
-# Install PostgreSQL 16
-sudo apt install postgresql-16 postgresql-contrib-16
-
-# Start PostgreSQL service
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Verify installation
-psql --version
-```
-
-#### Configure PostgreSQL
-
-```bash
-# Switch to postgres user
-sudo -u postgres psql
-
-# Create database user (replace 'your_username' and 'your_password' with your desired credentials)
-CREATE USER your_username WITH PASSWORD 'your_password';
-
-# Create database
-CREATE DATABASE agentic_db OWNER your_username;
-
-# Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE agentic_db TO your_username;
-
-# Exit PostgreSQL
-\q
-```
-
-#### Test Database Connection
-
-```bash
-# Test connection with your credentials
-psql -h localhost -U your_username -d agentic_db -p 5432
-
-# You should see the PostgreSQL prompt. Type \q to exit.
-```
-
-### 5. Environment Configuration
-
-Create a `.env` file in the project root:
-
-```bash
-# Create .env file
-touch .env
-```
-
-Add your API keys and database configuration:
-
-```bash
-# API Keys
-OPENAI_API_KEY=your_openai_key_here
-GEMINI_API_KEY=your_gemini_key_here
-
-# AWS Configuration
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
-AWS_DEFAULT_REGION=us-east-1
-AWS_BUCKET=your_s3_bucket_name
-
-# Tool-specific keys
-HELIUS_API_KEY=your_helius_key_here
-
-# Weather API (optional)
-OPENWEATHER_API_KEY=your_openweather_key
-
-# Flight API (optional)
-AMADEUS_CLIENT_ID=your_amadeus_client_id
-AMADEUS_CLIENT_SECRET=your_amadeus_client_secret
-
-# PostgreSQL Database Configuration
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=agentic_db
-POSTGRES_USER=your_username
-POSTGRES_PASSWORD=your_password
-```
-
-### 6. Install Docker
-
-#### Install Docker on Ubuntu
-```bash
-# Update package index
-sudo apt update
-
-# Install prerequisites
-sudo apt install apt-transport-https ca-certificates curl gnupg lsb-release
-
-# Add Docker's official GPG key
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-# Add Docker repository
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Update package index again
-sudo apt update
-
-# Install Docker Engine
-sudo apt install docker-ce docker-ce-cli containerd.io
-
-# Add your user to docker group (to run docker without sudo)
-sudo usermod -aG docker $USER
-
-# Start Docker service
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Log out and log back in for group changes to take effect
-# Or run: newgrp docker
-```
-
-#### Verify Docker installation
-```bash
-docker --version
-docker run hello-world
-```
-
-### 7. Build Docker Sandbox Images
-
-The project includes Dockerfiles for sandbox environments that provide isolated execution environments for code.
-
-#### Build Docker Sandbox Images
-
-```bash
-# Build Python sandbox image
-docker build -f Dockerfile.python -t sandbox-python .
-
-# Build Node.js sandbox image  
-docker build -f Dockerfile.node -t sandbox-node .
-
-# Verify images were created
-docker images | grep sandbox
-```
-
-
-
-
-#### Remove images (optional)
-```bash
-docker rmi sandbox-python sandbox-node
-```
-
-
-
-### 8. Running the Application
-
-#### Activate Virtual Environment
-```bash
-# Always activate virtual environment before running any commands
-source env/bin/activate
-```
-
-#### Run Sandbox Tool with Uvicorn
-
-```bash
-# Make sure virtual environment is activated
-source env/bin/activate
-
-# Run sandbox tool server
-uvicorn sandbox_server:app --host 0.0.0.0 --port 8000 --reload
-```
-
-The sandbox tool will be available at `http://localhost:8001`
-
-#### Run Test Workflow
-
-```bash
-# Make sure virtual environment is activated
-source env/bin/activate
-
-# Run the test workflow
-python test_workflow.py
-```
-
-This will test the main planner-react agent workflow with a sample query.
-
-#### Run API Server
-
-```bash
-# Make sure virtual environment is activated
-source env/bin/activate
-
-# Run the main API server
-uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
-```
-
-The API server will be available at `http://localhost:8001`
-
-#### API Endpoints
-
-Once the server is running, you can access:
-
-- **API Documentation**: `http://localhost:8000/docs`
-- **Health Check**: `http://localhost:8000/health`
-- **Available Tools**: `http://localhost:8000/tools`
-- **Query Processing**: `POST http://localhost:8000/query`
-
-### 9. Docker Deployment (Optional)
-
-#### Build and Run with Docker
-
-```bash
-# Build the Python Docker image
-docker build -f Dockerfile.python -t langgraph-api .
-
-# Run the container
-docker run -p 8000:8000 --env-file .env langgraph-api
-```
-
-#### Using Docker Compose (if you have a docker-compose.yml)
-
-```bash
-# Build and run all services
-docker-compose up --build
-
-# Run in background
-docker-compose up -d
-```
-
-### 10. Test LangGraph Workflow
-
-#### Test Basic Workflow
-```bash
-# Run the test workflow
-python test_workflow.py
-```
-
-#### Test Session Management
-```bash
-# Test complete session workflow with database
-python test_session_workflow.py
-```
-
-This will test:
-- Session creation via API
-- Message persistence to database
-- Session history retrieval
-- Multiple queries in the same session
-- Session cleanup
-
-
-
-**Port Already in Use:**
-```bash
-# Check what's using the port
-sudo lsof -i :8000
-
-# Kill the process
-sudo kill -9 <PID>
-```
-
-**Database Connection Issues:**
-```bash
-# Check if PostgreSQL is running
-sudo systemctl status postgresql
-
-# Restart PostgreSQL if needed
-sudo systemctl restart postgresql
-
-# Check PostgreSQL logs
-sudo tail -f /var/log/postgresql/postgresql-16-main.log
-
-# Test database connection
-psql -h localhost -U your_username -d agentic_db -p 5432
-```
-
-**Database Schema Issues:**
-```bash
-# The application will automatically create tables on first run
-# If you need to manually initialize the database:
-python3 -c "from utils.db_utils import init_database; init_database()"
-```
-
-
-
-### 11. Project Structure
+## Framework Structure
 
 ```
 deepsense/
-├── api/                   # FastAPI server implementation
-├── graph/                 # Main workflow definitions
-├── tools/                 # Tool implementations
-├── utils/                 # Utility modules
-└── sanbox_runner.js            # This file
-└── sanbox_runner.py            # This file
-└── sanbox_server.py            # This file
-├── requirements.txt       # Python dependencies
-├── .env                   # Environment variables
-├── Dockerfile.python      # Python Docker configuration
-├── Dockerfile.node        # Node.js Docker configuration
-└── README.md             # This file
+├── __init__.py              # Framework exports and .env auto-loading
+├── datasource.py            # DataSource base class, @tool decorator, DataSourceManager
+├── workflow.py              # Workflow orchestration engine
+├── checkpointer.py          # MongoDB checkpointer for state persistence
+├── summarizer_graph.py      # Chunking and schema discovery
+├── system_prompt.py         # Default system prompt
+├── agents.py                # Base agent class
+├── sandbox/                 # Secure code execution
+│   ├── server.py            # FastAPI sandbox server
+│   ├── runner.py            # Python code runner
+│   ├── runner.js            # Node.js code runner
+│   ├── Dockerfile.python    # Python 3.11 Docker image
+│   └── Dockerfile.node      # Node.js 20 Docker image
+└── utils/                   # Framework utilities
+    ├── token_utils.py       # Token counting and chunking
+    └── s3_utils.py          # AWS S3 integration
 ```
+
+See [architecture.md](architecture.md) for detailed component architecture and interactions.
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or later
+- MongoDB (for checkpointing)
+- Docker (optional, for sandbox tool)
+
+### Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Environment Setup
+
+Create a `.env` file in the project root (automatically loaded on import):
+
+```bash
+# LLM Configuration
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4o
+LLM_PROVIDER=openai  # or "anthropic", "google"
+
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017/
+
+# Sandbox (optional)
+SANDBOX_URL=http://localhost:8000/run
+
+# AWS S3 (optional, for large output storage)
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_BUCKET=your_bucket_name
+AWS_REGION=us-east-1
+```
+
+## Quick Start
+
+### 1. Create a Datasource
+
+```python
+from deepsense import DataSource, DataSourceConfig, tool
+from typing import Dict, Any
+
+class CryptoDataSource(DataSource):
+    """Example datasource for cryptocurrency price data."""
+    def __init__(self):
+        config = DataSourceConfig(
+            name="crypto_api",
+            rest_url="https://api.coingecko.com/api/v3",
+            headers={"Accept": "application/json"}
+        )
+        super().__init__(config)
+    
+    @tool(name="crypto_data", description="Get cryptocurrency price and market data")
+    def get_price(self, coin_id: str, vs_currency: str = "usd") -> Dict[str, Any]:
+        """Get current price and market data for a cryptocurrency."""
+        return self.get("/simple/price", {
+            "ids": coin_id,
+            "vs_currencies": vs_currency,
+            "include_market_cap": "true",
+            "include_24hr_vol": "true"
+        })
+    
+    def health_check(self) -> bool:
+        return True
+```
+
+### 2. Create a Workflow Instance
+
+```python
+from deepsense import Workflow, MongoDBCheckpointer
+from deepsense.datasource import DataSourceManager
+
+# Register datasource
+datasource_manager = DataSourceManager()
+crypto_source = CryptoDataSource()
+datasource_manager.register_source("crypto_api", crypto_source)
+
+# Create tools from datasource
+tools = crypto_source.get_tools()  # Automatically creates LangChain tools
+
+# Initialize checkpointer
+checkpointer = MongoDBCheckpointer(
+    connection_string="mongodb://localhost:27017/",
+    database_name="deepsense"
+)
+
+# Create workflow
+workflow = Workflow(
+    checkpointer=checkpointer,
+    llm_model="gpt-4o",
+    llm_provider="openai",
+    api_key="your-api-key",
+    custom_tools=tools,
+    chunking_threshold=15000
+)
+```
+
+### 3. Invoke the Workflow
+
+```python
+# Invoke with an analytical query
+result = workflow.invoke(
+    query="What is the current price of bitcoin and how has it changed in the last 24 hours?",
+    session_id="session-123"
+)
+
+# Extract response
+if result and 'messages' in result:
+    last_message = result['messages'][-1]
+    print(last_message.content)
+
+# Extract user actions (if any)
+user_actions = result.get('user_actions', [])
+```
+
+## Framework Components
+
+For detailed architecture, component interactions, and design decisions, see [architecture.md](architecture.md).
+
+### DataSource System
+
+The datasource system provides a unified interface for accessing external APIs:
+
+**Features:**
+- REST and RPC endpoint support
+- Automatic session management
+- Configurable headers, params, and timeouts
+- Health check interface
+- Declarative tool creation via `@tool` decorator
+
+**Unified Tools:**
+When multiple methods share the same `tool_name`, they become a unified tool with an `action` parameter:
+
+```python
+class MyDataSource(DataSource):
+    @tool(name="my_api", description="Get user data")
+    def get_user(self, user_id: str) -> Dict:
+        """Get user by ID."""
+        return self.get(f"/users/{user_id}")
+    
+    @tool(name="my_api", description="Get user posts")
+    def get_posts(self, user_id: str) -> Dict:
+        """Get posts by user."""
+        return self.get(f"/users/{user_id}/posts")
+    
+    # Both methods become a single "my_api" tool with action parameter
+```
+
+### Workflow Engine
+
+The workflow engine orchestrates LLM interactions with tools:
+
+**Graph Flow:**
+```
+tool_selection → model → router → [tools | end]
+                                    ↓
+                            select_tool_output
+                                    ↓
+                    [model | discover_schema | add_tool_messages]
+```
+
+**Features:**
+- Dynamic tool binding
+- Conditional routing
+- Automatic chunking for large outputs
+- User action detection
+- Session-based state management
+
+See [architecture.md](architecture.md) for detailed workflow flow and data processing diagrams.
+
+### Checkpointer
+
+MongoDB-based state persistence:
+
+**Features:**
+- Stores complete workflow state (not just messages)
+- Session-based isolation
+- Automatic state restoration
+- LangGraph checkpointer interface
+
+**Note:** Message history for display/retrieval is separate and should be managed by your application (see `example/server.py`).
+
+### Summarizer Graph
+
+Handles large tool outputs:
+
+**Features:**
+- Schema discovery from large JSON outputs
+- Summarization of verbose outputs
+- Parallel chunk processing
+- Optional S3 storage
+- Mandatory for chunking (no fallback)
+
+### Sandbox Tool
+
+Secure code execution:
+
+**Features:**
+- Isolated Docker containers
+- Python 3.11 and Node.js 20 support
+- Automatic dependency installation
+- Matplotlib image generation
+- File download support
+
+See [architecture.md](architecture.md) for deployment architecture and security considerations.
+
+## Example Implementation
+
+See the `example/` folder for a complete implementation including:
+
+- Multiple datasource examples (Helius, Jupiter, CoinGecko, GitHub, etc.)
+- Workflow instance configuration
+- FastAPI server with message history management
+- Environment variable examples
+
+```bash
+# Run the example server
+cd example
+python server.py
+```
+
+See `example/README.md` for detailed usage instructions.
+
+## Documentation
+
+- **[Architecture](architecture.md)**: Detailed system architecture and design decisions
+- **[Framework Structure](FRAMEWORK_STRUCTURE.md)**: Framework component details
+- **[Example README](example/README.md)**: Example implementation guide
+
+## Requirements
+
+### Core Dependencies
+
+- `langgraph>=0.2.0` - Workflow orchestration
+- `langchain>=0.2.0` - LLM integration
+- `langchain-core>=0.2.0` - Core LangChain components
+- `langchain-openai>=0.1.0` - OpenAI integration
+- `langchain-anthropic>=0.1.0` - Anthropic integration
+- `langchain-google-genai>=0.1.0` - Google Gemini integration
+- `pymongo>=4.6.0` - MongoDB driver
+- `fastapi>=0.104.0` - Web framework (for sandbox server)
+- `pydantic>=2.0.0` - Data validation
+- `python-dotenv>=1.0.0` - Environment variable management
+- `tiktoken>=0.5.0` - Token counting
+- `boto3>=1.34.0` - AWS S3 integration (optional)
+- `requests>=2.31.0` - HTTP client
+
+See `requirements.txt` for complete list.
 
 ## License
 
