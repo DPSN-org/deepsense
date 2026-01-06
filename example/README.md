@@ -22,10 +22,10 @@ From the project root directory:
 pip install -r requirements.txt
 ```
 
-### 2. Install Frontend Dependencies
+### 2. Install Chat UI Dependencies
 
 ```bash
-cd frontend
+cd chat-ui
 npm install
 # or if using bun
 bun install
@@ -46,7 +46,7 @@ SERVER_PORT=8001  # Backend server port
 SANDBOX_URL=http://localhost:8000/run
 ```
 
-**Frontend (.env in frontend/ directory):**
+**Chat UI (.env in chat-ui/ directory):**
 ```bash
 # Backend API URL (default: http://localhost:8001)
 VITE_API_BASE_URL=http://localhost:8001
@@ -71,23 +71,23 @@ python example/server.py
 
 The backend will start on `http://localhost:8001`
 
-**Terminal 2 - Frontend:**
+**Terminal 2 - Chat UI:**
 ```bash
-# From frontend directory
-cd frontend
+# From chat-ui directory
+cd chat-ui
 npm run dev
 # or
 bun run dev
 ```
 
-The frontend will start on `http://localhost:8080`
+The chat UI will start on `http://localhost:8080`
 
 ### Option 2: Use npm scripts (if configured)
 
 ```bash
 # From project root
 npm run start:backend  # Start backend
-npm run start:frontend # Start frontend
+npm run start:chat-ui # Start chat UI
 ```
 
 ## API Endpoints
@@ -108,9 +108,9 @@ The backend provides these endpoints:
 - `GET /sessions/{session_id}/messages` - Get messages for a session
 - `GET /health` - Health check
 
-## Frontend Features
+## Chat UI Features
 
-The frontend (`frontend/`) provides:
+The chat UI (`chat-ui/`) provides:
 
 - 💬 Real-time chat interface
 - 📂 Session management
@@ -121,7 +121,7 @@ The frontend (`frontend/`) provides:
 
 ## Example Query
 
-Open the frontend at `http://localhost:8080` and try:
+Open the chat UI at `http://localhost:8080` and try:
 
 - "What is the current price of bitcoin?"
 - "Get info about the langchain-ai/langchain repository"
@@ -170,9 +170,9 @@ Modify `workflow_instance.py` to:
 - Customize the LLM model
 - Adjust workflow behavior
 
-### Frontend Configuration
+### Chat UI Configuration
 
-Edit `frontend/.env` to change:
+Edit `chat-ui/.env` to change:
 - Backend API URL (`VITE_API_BASE_URL`)
 - Other frontend-specific settings
 
@@ -183,10 +183,10 @@ Edit `frontend/.env` to change:
 - Verify backend is running on port 8001: `curl http://localhost:8001/health`
 - Check CORS settings in `server.py`
 
-### Frontend can't connect to backend
-- Verify `VITE_API_BASE_URL` in `frontend/.env` matches backend URL
+### Chat UI can't connect to backend
+- Verify `VITE_API_BASE_URL` in `chat-ui/.env` matches backend URL
 - Check browser console for CORS errors
-- Ensure backend CORS allows frontend origin (http://localhost:8080)
+- Ensure backend CORS allows chat UI origin (http://localhost:8080)
 
 ### Session issues
 - Check MongoDB connection

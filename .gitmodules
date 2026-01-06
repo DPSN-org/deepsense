@@ -1,3 +1,3 @@
-[submodule "frontend"]
-	path = frontend
+[submodule "chat-ui"]
+	path = chat-ui
 	url = https://github.com/DPSN-org/ai-agent-ui.git

@@ -272,7 +272,7 @@ See the `example/` folder for a complete implementation including:
 - Multiple datasource examples (Helius, Jupiter, CoinGecko, GitHub, etc.)
 - Workflow instance configuration
 - FastAPI server with message history management
-- **Frontend UI** - React/TypeScript chat interface (from [ai-agent-ui](https://github.com/DPSN-org/ai-agent-ui))
+- **Chat UI** - React/TypeScript chat interface (from [ai-agent-ui](https://github.com/DPSN-org/ai-agent-ui))
 
 ### Quick Start
 
@@ -283,15 +283,15 @@ python example/server.py
 # Server runs on http://localhost:8001
 ```
 
-**Frontend:**
+**Chat UI:**
 ```bash
-# Install frontend dependencies
-cd frontend
+# Install chat UI dependencies
+cd chat-ui
 npm install
 
-# Start frontend dev server
+# Start chat UI dev server
 npm run dev
-# Frontend runs on http://localhost:8080
+# Chat UI runs on http://localhost:8080
 ```
 
 See `example/README.md` for detailed setup and usage instructions.

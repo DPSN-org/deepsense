@@ -170,11 +170,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-# Allow frontend origin (default Vite dev server runs on port 8080)
-frontend_origin = os.getenv("FRONTEND_URL", "http://localhost:8080")
+# Allow chat UI origin (default Vite dev server runs on port 8080)
+chat_ui_origin = os.getenv("CHAT_UI_URL", "http://localhost:8080")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin, "http://localhost:8080", "http://localhost:5173"],
+    allow_origins=[chat_ui_origin, "http://localhost:8080", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
