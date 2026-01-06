@@ -4,5 +4,6 @@ RUN useradd -m sandbox
 WORKDIR /home/sandbox
 USER sandbox
 
-COPY sandbox_runner.js /home/sandbox/runner.js
+COPY runner.js /home/sandbox/runner.js
 CMD ["node", "runner.js"]
+

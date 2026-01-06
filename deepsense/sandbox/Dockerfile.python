@@ -4,5 +4,6 @@ RUN useradd -m sandbox
 WORKDIR /home/sandbox
 USER sandbox
 
-COPY sandbox_runner.py /home/sandbox/runner.py
+COPY runner.py /home/sandbox/runner.py
 CMD ["python", "runner.py"]
+

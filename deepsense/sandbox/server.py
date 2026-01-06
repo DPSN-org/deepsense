@@ -1,3 +1,7 @@
+"""
+Sandbox server for executing code in isolated Docker containers.
+"""
+
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import uuid
@@ -43,3 +47,4 @@ def run_script(body: ScriptRequest):
     print(result.stdout)
     print(result.stderr)
     return {"stdout": result.stdout, "stderr": result.stderr}
+
