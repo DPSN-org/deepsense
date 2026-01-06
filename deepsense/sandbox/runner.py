@@ -1,3 +1,7 @@
+"""
+Python runner for sandbox execution.
+"""
+
 import subprocess
 import sys
 import json
@@ -23,3 +27,4 @@ with open("script/user_script.py", "w") as f:
 result = subprocess.run(["python", "script/user_script.py"], capture_output=True, text=True)
 print(result.stdout)
 print(result.stderr, file=sys.stderr)
+
